@@ -6,7 +6,10 @@ target_include_directories(SecondReality PRIVATE ${SOKOL_PATH})
 
 if(EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
-    set_target_properties(SecondReality PROPERTIES
-        LINK_FLAGS "-s USE_WEBGL2=1 -s FULL_ES3=1 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1"
+    target_link_options(SecondReality PRIVATE
+        "SHELL:-s USE_WEBGL2=1"
+        "SHELL:-s FULL_ES3=1"
+        "SHELL:-s WASM=1"
+        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
     )
 endif()
