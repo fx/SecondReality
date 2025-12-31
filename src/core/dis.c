@@ -37,9 +37,6 @@ int dis_version(void) {
 }
 
 void dis_partstart(void) {
-    if (!dis_state.initialized) {
-        fprintf(stderr, "DIS: Warning - dis_partstart called before initialization\n");
-    }
     dis_version();
 }
 
@@ -58,6 +55,7 @@ int dis_waitb(void) {
     if (frames == 0) {
         frames = 1; /* Always return at least 1 */
     }
+    /* NOTE: Not thread-safe. Must be called from the same thread as dis_frame_tick() */
     dis_state.frame_counter = 0;
 
     return frames;
@@ -91,7 +89,7 @@ int dis_musrow(int row) {
 
 void *dis_msgarea(int areanumber) {
     if (areanumber < 0 || areanumber >= DIS_MSG_AREA_COUNT) {
-        fprintf(stderr, "DIS: Invalid message area %d (valid: 0-%d)\n",
+        fprintf(stderr, "DIS: ERROR Invalid message area %d (valid: 0-%d)\n",
                 areanumber, DIS_MSG_AREA_COUNT - 1);
         return NULL;
     }
@@ -100,7 +98,7 @@ void *dis_msgarea(int areanumber) {
 
 void dis_setcopper(int routine_number, dis_copper_fn routine) {
     if (routine_number < 0 || routine_number >= DIS_COPPER_COUNT) {
-        fprintf(stderr, "DIS: Invalid copper routine %d (valid: 0-%d)\n",
+        fprintf(stderr, "DIS: ERROR Invalid copper routine %d (valid: 0-%d)\n",
                 routine_number, DIS_COPPER_COUNT - 1);
         return;
     }
@@ -137,6 +135,12 @@ void dis_handle_event(const sapp_event *e) {
     }
 }
 
+/**
+ * Reset DIS state for part transitions.
+ * Call this before loading a new demo part to clear transient state
+ * (exit flag, frame counter, copper callbacks) while preserving
+ * persistent state (message areas, music position).
+ */
 void dis_reset(void) {
     /* Clear transient state for part transitions */
     dis_state.exit_flag = 0;

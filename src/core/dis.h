@@ -30,9 +30,10 @@
 typedef void (*dis_copper_fn)(void);
 
 /**
- * Initialize DIS. Must be called at start of each demo part.
- * Clears the exit flag and initializes internal state.
- * @return Version number (0x100 for V1.0), 0 if not installed
+ * Initialize DIS and return version number.
+ * Also clears exit flag and resets frame counter.
+ * @return Version number (0x100 for V1.0). In this cross-platform
+ *         implementation, DIS is always available.
  */
 int dis_version(void);
 
@@ -44,8 +45,10 @@ int dis_version(void);
 void dis_partstart(void);
 
 /**
- * Wait for vertical blank (frame sync).
- * @return Number of frames since last call
+ * Returns frame count since last call.
+ * In the cross-platform implementation, this is non-blocking and adapts
+ * to Sokol's frame callback model instead of blocking for vblank.
+ * @return Frame count since last call
  */
 int dis_waitb(void);
 
@@ -62,9 +65,9 @@ int dis_exit(void);
 int dis_indemo(void);
 
 /**
- * Get music synchronization code.
- * @param code The code you are waiting for
- * @return Current music code
+ * Get current music synchronization code.
+ * @param code The code being waited for (for future skip logic, not currently used)
+ * @return Current music code (stub: returns 0)
  */
 int dis_muscode(int code);
 
@@ -76,15 +79,16 @@ int dis_musplus(void);
 
 /**
  * Get music row synchronization.
- * @param row The row you are waiting for
- * @return Current music row
+ * @param row The row being waited for (for future skip logic, not currently used)
+ * @return Current music row (stub: returns 0)
  */
 int dis_musrow(int row);
 
 /**
  * Get pointer to inter-part communication area.
  * @param areanumber Area index (0-3)
- * @return Pointer to 64-byte message area, NULL if invalid index
+ * @return Pointer to 64-byte buffer, NULL if invalid index.
+ * @warning Caller must not write beyond DIS_MSG_AREA_SIZE (64 bytes)
  */
 void *dis_msgarea(int areanumber);
 

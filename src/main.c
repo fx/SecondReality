@@ -6,12 +6,12 @@
 static sg_pass_action pass_action;
 
 static void init(void) {
+    /* Initialize DIS first */
+    dis_version();
+
     sg_setup(&(sg_desc){
         .environment = sglue_environment()
     });
-
-    /* Initialize DIS */
-    dis_partstart();
 
     /* Dark blue clear color - visible test */
     pass_action = (sg_pass_action){
@@ -20,13 +20,10 @@ static void init(void) {
 }
 
 static void frame(void) {
-    /* Tick DIS frame counter */
     dis_frame_tick();
 
-    /* Check for exit request */
     if (dis_exit()) {
         sapp_request_quit();
-        return;
     }
 
     sg_begin_pass(&(sg_pass){ .action = pass_action, .swapchain = sglue_swapchain() });
