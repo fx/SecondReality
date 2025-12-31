@@ -1,6 +1,7 @@
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
+#include "core/dis.h"
 
 static sg_pass_action pass_action;
 
@@ -9,13 +10,25 @@ static void init(void) {
         .environment = sglue_environment()
     });
 
-    // Dark blue clear color - visible test
+    /* Initialize DIS */
+    dis_partstart();
+
+    /* Dark blue clear color - visible test */
     pass_action = (sg_pass_action){
         .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { 0.0f, 0.1f, 0.2f, 1.0f } }
     };
 }
 
 static void frame(void) {
+    /* Tick DIS frame counter */
+    dis_frame_tick();
+
+    /* Check for exit request */
+    if (dis_exit()) {
+        sapp_request_quit();
+        return;
+    }
+
     sg_begin_pass(&(sg_pass){ .action = pass_action, .swapchain = sglue_swapchain() });
     sg_end_pass();
     sg_commit();
@@ -26,9 +39,8 @@ static void cleanup(void) {
 }
 
 static void event(const sapp_event* e) {
-    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_ESCAPE) {
-        sapp_request_quit();
-    }
+    /* Let DIS handle events */
+    dis_handle_event(e);
 }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
