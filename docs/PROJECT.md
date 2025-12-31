@@ -28,12 +28,12 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [ ] Add sokol as submodule/vendor
     - [ ] Configure native builds (Linux, macOS, Windows)
     - [ ] Configure Emscripten/WASM build
-  - [ ] Create core framework (replaces DIS)
-    - [ ] Create `src/core/dis.h` - demo interrupt server API
-    - [ ] Implement `dis_waitb()` - frame sync using sokol_app
-    - [ ] Implement `dis_exit()` - clean exit handling
-    - [ ] Implement `dis_muscode()` - music sync interface
-    - [ ] Implement `dis_setcopper()` - palette/raster effects
+  - [x] Create core framework (replaces DIS) (PR #2)
+    - [x] Create `src/core/dis.h` - demo interrupt server API
+    - [x] Implement `dis_waitb()` - frame sync using sokol_app
+    - [x] Implement `dis_exit()` - clean exit handling
+    - [x] Implement `dis_muscode()` - music sync interface
+    - [x] Implement `dis_setcopper()` - palette/raster effects
   - [ ] Create video subsystem
     - [ ] Implement 320x200 framebuffer with scaling
     - [ ] Implement 320x400 mode support
