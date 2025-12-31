@@ -1,1 +1,12 @@
 .DS_Store
+
+# Build directories
+build/
+build-wasm/
+
+# Object files and libraries
+*.o
+*.a
+*.so
+*.dylib
+*.exe
