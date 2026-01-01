@@ -10,11 +10,16 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Sync point timing (frames at 60fps) */
+#define SYNC_FRAMES_PER_POINT 300  /* ~5 seconds per sync point */
+#define SYNC_POINT_MAX 8
+
 /* Internal DIS state */
 static struct {
     int initialized;
     int exit_flag;
     int frame_counter;
+    int total_frames;           /* Total frames since part start (for sync) */
     int music_frame;
     int music_code;
     int music_row;
@@ -27,6 +32,7 @@ int dis_version(void) {
     /* Clear transient state */
     dis_state.exit_flag = 0;
     dis_state.frame_counter = 0;
+    dis_state.total_frames = 0;
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;
@@ -118,14 +124,48 @@ int dis_getmframe(void) {
 }
 
 int dis_sync(void) {
-    /* Returns same as musplus for sync point tracking */
-    return dis_musplus();
+    /*
+     * Sync points for ALKU (from original MAIN.C comments):
+     * 0 = initial (black)
+     * 1 = fc_pres ("A Future Crew Production")
+     * 2 = first ("First Presented at Assembly 93")
+     * 3 = maisema ("in Second Reality" / horizon)
+     * 4 = gfx (graphics credits)
+     * 5 = music (music credits)
+     * 6 = code (code credits)
+     * 7 = addi (additional credits)
+     * 8 = exit
+     *
+     * If music is playing, map position to sync points.
+     * Otherwise, use frame-based timing (~5 seconds per point).
+     */
+    if (music_is_playing()) {
+        /* Map music position to sync points 0-8 */
+        double pos = music_get_position_seconds();
+        if (pos < 3.0) return 0;
+        if (pos < 8.0) return 1;
+        if (pos < 13.0) return 2;
+        if (pos < 18.0) return 3;
+        if (pos < 23.0) return 4;
+        if (pos < 28.0) return 5;
+        if (pos < 33.0) return 6;
+        if (pos < 38.0) return 7;
+        return 8;
+    }
+
+    /* Fallback: frame-based timing */
+    int sync_point = dis_state.total_frames / SYNC_FRAMES_PER_POINT;
+    if (sync_point > SYNC_POINT_MAX) {
+        sync_point = SYNC_POINT_MAX;
+    }
+    return sync_point;
 }
 
 /* Internal Sokol integration functions */
 
 void dis_frame_tick(void) {
     dis_state.frame_counter++;
+    dis_state.total_frames++;
 }
 
 void dis_handle_event(const sapp_event *e) {
@@ -149,6 +189,7 @@ void dis_reset(void) {
     /* Clear transient state for part transitions */
     dis_state.exit_flag = 0;
     dis_state.frame_counter = 0;
+    dis_state.total_frames = 0;
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;

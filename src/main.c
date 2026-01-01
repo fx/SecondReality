@@ -149,10 +149,25 @@ static void init(void) {
 
     /* Initialize audio subsystem */
     if (music_init()) {
-        /* Try to load the main demo music for testing */
-        if (music_load_file("MAIN/MUSIC0.S3M")) {
-            music_play();
+        /* Try to load the main demo music - try multiple paths */
+        const char *music_paths[] = {
+            "MAIN/MUSIC0.S3M",           /* Relative from build dir */
+            "../MAIN/MUSIC0.S3M",        /* Relative from src dir */
+            "/workspace/MAIN/MUSIC0.S3M" /* Absolute path */
+        };
+        int loaded = 0;
+        for (int i = 0; i < 3 && !loaded; i++) {
+            if (music_load_file(music_paths[i])) {
+                printf("[main] Loaded music from: %s\n", music_paths[i]);
+                music_play();
+                loaded = 1;
+            }
         }
+        if (!loaded) {
+            printf("[main] WARNING: Could not load music file MUSIC0.S3M\n");
+        }
+    } else {
+        printf("[main] WARNING: Music subsystem failed to initialize\n");
     }
 
     /* Initialize part loader */
@@ -224,8 +239,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .width = 320,
-        .height = 200,
+        .width = 640,
+        .height = 400,
         .window_title = "Second Reality",
         .icon.sokol_default = true,
     };
