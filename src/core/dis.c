@@ -11,7 +11,8 @@
 #include <stdio.h>
 
 /* Sync point timing (frames at 60fps) */
-#define SYNC_FRAMES_PER_POINT 300  /* ~5 seconds per sync point */
+#define SYNC_FRAMES_PER_POINT 600  /* ~10 seconds per sync point */
+#define SYNC_FRAMES_FIRST 1080     /* ~18 seconds until first sync point */
 #define SYNC_POINT_MAX 8
 
 /* Internal DIS state */
@@ -142,19 +143,21 @@ int dis_sync(void) {
     if (music_is_playing()) {
         /* Map music position to sync points 0-8 */
         double pos = music_get_position_seconds();
-        if (pos < 3.0) return 0;
-        if (pos < 8.0) return 1;
-        if (pos < 13.0) return 2;
-        if (pos < 18.0) return 3;
-        if (pos < 23.0) return 4;
-        if (pos < 28.0) return 5;
-        if (pos < 33.0) return 6;
-        if (pos < 38.0) return 7;
-        return 8;
+        if (pos < 18.0) return 0;   /* 0-18s: black/waiting */
+        if (pos < 28.0) return 1;   /* 18-28s: "A Future Crew Production" */
+        if (pos < 38.0) return 2;   /* 28-38s: "First Presented at Assembly 93" */
+        if (pos < 48.0) return 3;   /* 38-48s: "in Second Reality" */
+        if (pos < 58.0) return 4;   /* 48-58s: horizon + graphics credits */
+        if (pos < 68.0) return 5;   /* 58-68s: music credits */
+        if (pos < 78.0) return 6;   /* 68-78s: code credits */
+        if (pos < 88.0) return 7;   /* 78-88s: additional credits */
+        return 8;                   /* 88s+: exit */
     }
 
-    /* Fallback: frame-based timing */
-    int sync_point = dis_state.total_frames / SYNC_FRAMES_PER_POINT;
+    /* Fallback: frame-based timing (60fps) */
+    int frames = dis_state.total_frames;
+    if (frames < SYNC_FRAMES_FIRST) return 0;   /* 0-18s (1080 frames) */
+    int sync_point = 1 + (frames - SYNC_FRAMES_FIRST) / SYNC_FRAMES_PER_POINT;
     if (sync_point > SYNC_POINT_MAX) {
         sync_point = SYNC_POINT_MAX;
     }

@@ -575,8 +575,10 @@ static void alku_render(sr_part_t *part)
 {
     alku_state_t *s = (alku_state_t *)part->user_data;
 
-    /* Render horizon background (always, even if black) */
-    render_horizon(s);
+    /* Only render horizon during horizon/credits phases */
+    if (s->phase >= PHASE_HORIZON) {
+        render_horizon(s);
+    }
 
     /* Apply text overlay during credits phase */
     if (s->phase == PHASE_CREDITS || s->phase == PHASE_HORIZON) {
