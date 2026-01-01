@@ -44,7 +44,7 @@ static void music_openmpt_log(const char *message, void *user) {
 }
 
 /* Test mode: set to 1 to play a 440Hz test tone instead of module */
-#define MUSIC_TEST_TONE 1
+#define MUSIC_TEST_TONE 0
 static double test_tone_phase = 0.0;
 
 /**
@@ -93,8 +93,16 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         int row = openmpt_module_get_current_row(music_state.mod);
         int speed = openmpt_module_get_current_speed(music_state.mod);
         int tempo = openmpt_module_get_current_tempo(music_state.mod);
-        printf("MUSIC: rendered %zu frames, order=%d pattern=%d row=%d speed=%d tempo=%d\n",
-               frames_rendered, order, pattern, row, speed, tempo);
+
+        /* Check audio sample values */
+        float min_val = 0.0f, max_val = 0.0f;
+        for (int i = 0; i < num_frames * 2; i++) {
+            if (buffer[i] < min_val) min_val = buffer[i];
+            if (buffer[i] > max_val) max_val = buffer[i];
+        }
+
+        printf("MUSIC: rendered %zu frames, order=%d row=%d speed=%d tempo=%d samples=[%.3f,%.3f]\n",
+               frames_rendered, order, row, speed, tempo, min_val, max_val);
     }
 
     /* Fill remainder with silence if we didn't get enough frames */
