@@ -99,6 +99,29 @@ static void prtc(alku_state_t *s, int center_x, int y, const char *txt)
 }
 
 /**
+ * Perform a blocking palette fade between two palettes.
+ * Interpolates in 64 steps, updating video palette each frame.
+ *
+ * @param s Part state
+ * @param pal1 Source palette (768 bytes)
+ * @param pal2 Target palette (768 bytes)
+ */
+static void dofade(alku_state_t *s, const uint8_t *pal1, const uint8_t *pal2)
+{
+    uint8_t pal[ALKU_PALETTE_SIZE];
+    int step, i;
+
+    for (step = 0; step < 64 && !dis_exit(); step++) {
+        for (i = 0; i < ALKU_PALETTE_SIZE; i++) {
+            /* Linear interpolation: pal1*(64-step) + pal2*step >> 6 */
+            pal[i] = (pal1[i] * (64 - step) + pal2[i] * step) >> 6;
+        }
+        video_set_palette(pal);
+        dis_waitb(); /* Wait for frame */
+    }
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
