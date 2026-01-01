@@ -8,7 +8,7 @@
 #ifndef ALKU_H
 #define ALKU_H
 
-#include "part.h"
+#include "core/part.h"
 
 /**
  * Get the ALKU part structure for registration with part loader.

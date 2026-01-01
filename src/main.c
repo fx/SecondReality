@@ -5,6 +5,7 @@
 #include "core/video.h"
 #include "core/part.h"
 #include "audio/music.h"
+#include "parts/alku/alku.h"
 #include <stdio.h>
 
 static sg_pass_action pass_action;
@@ -157,7 +158,10 @@ static void init(void) {
     /* Initialize part loader */
     part_loader_init();
 
-    /* Register test parts */
+    /* Register ALKU part (opening credits) */
+    part_loader_register(alku_get_part());
+
+    /* Register test parts (for fallback/testing) */
     part_loader_register(&test_part_1);
     part_loader_register(&test_part_2);
 
