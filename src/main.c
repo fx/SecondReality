@@ -3,6 +3,7 @@
 #include "sokol_glue.h"
 #include "core/dis.h"
 #include "core/video.h"
+#include "audio/music.h"
 
 static sg_pass_action pass_action;
 
@@ -16,6 +17,14 @@ static void init(void) {
 
     /* Initialize video subsystem */
     video_init();
+
+    /* Initialize audio subsystem */
+    if (music_init()) {
+        /* Try to load the main demo music for testing */
+        if (music_load_file("MAIN/MUSIC0.S3M")) {
+            music_play();
+        }
+    }
 
     /* Create test pattern: colored vertical bars */
     uint8_t *fb = video_get_framebuffer();
@@ -78,6 +87,7 @@ static void frame(void) {
 }
 
 static void cleanup(void) {
+    music_shutdown();
     video_shutdown();
     sg_shutdown();
 }

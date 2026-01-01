@@ -6,6 +6,7 @@
  */
 
 #include "dis.h"
+#include "audio/music.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -71,20 +72,22 @@ int dis_indemo(void) {
 }
 
 int dis_muscode(int code) {
-    (void)code; /* Unused in stub implementation */
-    /* TODO: Integrate with audio system when available */
-    return dis_state.music_code;
+    (void)code; /* Parameter reserved for skip logic */
+    /* Return current order from music subsystem */
+    return music_get_current_order();
 }
 
 int dis_musplus(void) {
-    /* TODO: Integrate with audio system when available */
-    return dis_state.music_plus;
+    /* Returns pattern*64 + row for sync calculations */
+    int order = music_get_current_order();
+    int row = music_get_current_row();
+    return order * 64 + row;
 }
 
 int dis_musrow(int row) {
-    (void)row; /* Unused in stub implementation */
-    /* TODO: Integrate with audio system when available */
-    return dis_state.music_row;
+    (void)row; /* Parameter reserved for skip logic */
+    /* Return current row from music subsystem */
+    return music_get_current_row();
 }
 
 void *dis_msgarea(int areanumber) {
@@ -114,8 +117,8 @@ int dis_getmframe(void) {
 }
 
 int dis_sync(void) {
-    /* TODO: Implement sync point logic when audio is integrated */
-    return 0;
+    /* Returns same as musplus for sync point tracking */
+    return dis_musplus();
 }
 
 /* Internal Sokol integration functions */

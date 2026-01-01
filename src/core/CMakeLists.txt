@@ -1,5 +1,5 @@
 add_library(sokol_core STATIC sokol.c dis.c video.c)
-target_include_directories(sokol_core PUBLIC ${SOKOL_PATH})
+target_include_directories(sokol_core PUBLIC ${SOKOL_PATH} ${CMAKE_SOURCE_DIR}/src)
 
 if(EMSCRIPTEN)
     target_compile_definitions(sokol_core PRIVATE SOKOL_GLES3)
