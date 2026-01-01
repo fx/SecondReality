@@ -114,11 +114,135 @@ int alku_load_font(alku_state_t *state)
     return 0;
 }
 
+/**
+ * Load raw bytes from an assembly db file into a buffer.
+ *
+ * @param filename File to load
+ * @param buf Output buffer
+ * @param max_bytes Maximum bytes to load
+ * @return Number of bytes loaded, or -1 on error
+ */
+static int load_db_file(const char *filename, uint8_t *buf, int max_bytes)
+{
+    FILE *f;
+    char line[4096];
+    uint8_t values[256];
+    int total = 0;
+
+    f = fopen(filename, "r");
+    if (!f) {
+        /* Try with ALKU/ prefix */
+        char path[256];
+        snprintf(path, sizeof(path), "ALKU/%s", filename);
+        f = fopen(path, "r");
+    }
+    if (!f) {
+        /* Try with ../ALKU/ prefix */
+        char path[256];
+        snprintf(path, sizeof(path), "../ALKU/%s", filename);
+        f = fopen(path, "r");
+    }
+    if (!f) {
+        return -1;
+    }
+
+    while (fgets(line, sizeof(line), f) && total < max_bytes) {
+        int count = parse_db_line(line, values, sizeof(values));
+        for (int i = 0; i < count && total < max_bytes; i++) {
+            buf[total++] = values[i];
+        }
+    }
+
+    fclose(f);
+    return total;
+}
+
 int alku_load_horizon(alku_state_t *state)
 {
-    /* TODO: Parse HOI.IN0 and HOI.IN1 */
+    uint8_t *raw_data;
+    int loaded;
+    int x, y;
+
     memset(state->horizon, 0, sizeof(state->horizon));
     memset(state->palette, 0, sizeof(state->palette));
+
+    /* Allocate buffer for raw planar data */
+    /* Header (16) + Palette (768) + Planar image data */
+    raw_data = (uint8_t *)malloc(256 * 1024);
+    if (!raw_data) {
+        fprintf(stderr, "alku: failed to allocate horizon buffer\n");
+        return -1;
+    }
+
+    /* Load HOI.IN0 */
+    loaded = load_db_file("HOI.IN0", raw_data, 256 * 1024);
+    if (loaded < ALKU_HORIZON_HEADER) {
+        fprintf(stderr, "alku: failed to load HOI.IN0 (got %d bytes)\n", loaded);
+        free(raw_data);
+        return -1;
+    }
+
+    /* Extract palette from first file (offset 16, 768 bytes) */
+    memcpy(state->palette, raw_data + 16, ALKU_PALETTE_SIZE);
+
+    /*
+     * The horizon image is stored in Mode X planar format.
+     * Each scanline is 176 bytes per plane (704 pixels / 4 planes).
+     * The image is 88 lines tall, replicated to 176 lines.
+     *
+     * We convert from planar to linear format for our framebuffer.
+     * In the original: outline() copies 4 bytes at position a*4+784
+     * which means data starts at offset 784 and each scanline's 4 planes
+     * are stored sequentially (4 bytes = one pixel column across 4 planes).
+     */
+
+    /* For simplicity, convert planar to linear 640-pixel wide scanlines */
+    /* The data layout in HOI files: each group of 4 bytes represents
+     * 4 pixels (one from each plane) at the same X position */
+    {
+        uint8_t *planar = raw_data + ALKU_HORIZON_HEADER;
+        int data_size = loaded - ALKU_HORIZON_HEADER;
+
+        /* Simpler approach: just copy data linearly and let rendering handle it */
+        /* The original uses a custom outline() function for Mode X */
+        /* For our linear framebuffer, we copy 640 pixels per line */
+        int pixels_available = data_size;
+        for (y = 0; y < ALKU_HORIZON_HEIGHT && y * 640 < pixels_available; y++) {
+            for (x = 0; x < 640 && (y * 640 + x) < pixels_available; x++) {
+                /* Simple 4-plane deinterleave: pixel x uses plane (x & 3) */
+                int plane_offset = x & 3;
+                int byte_in_plane = x >> 2;
+                int plane_stride = data_size / 4;
+                int src_idx = plane_offset * plane_stride + y * (640 / 4) + byte_in_plane;
+                if (src_idx < data_size) {
+                    state->horizon[y * ALKU_HORIZON_WIDTH + x] = planar[src_idx];
+                }
+            }
+        }
+    }
+
+    /* Load HOI.IN1 for lower half */
+    loaded = load_db_file("HOI.IN1", raw_data, 256 * 1024);
+    if (loaded > ALKU_HORIZON_HEADER) {
+        uint8_t *planar = raw_data + ALKU_HORIZON_HEADER;
+        int data_size = loaded - ALKU_HORIZON_HEADER;
+        int pixels_available = data_size;
+        int y_offset = ALKU_HORIZON_HEIGHT; /* Start at line 150 */
+
+        for (y = 0; y < ALKU_HORIZON_HEIGHT && y * 640 < pixels_available; y++) {
+            for (x = 0; x < 640 && (y * 640 + x) < pixels_available; x++) {
+                int plane_offset = x & 3;
+                int byte_in_plane = x >> 2;
+                int plane_stride = data_size / 4;
+                int src_idx = plane_offset * plane_stride + y * (640 / 4) + byte_in_plane;
+                if (src_idx < data_size) {
+                    state->horizon[(y + y_offset) * ALKU_HORIZON_WIDTH + x] = planar[src_idx];
+                }
+            }
+        }
+    }
+
+    free(raw_data);
     return 0;
 }
 
