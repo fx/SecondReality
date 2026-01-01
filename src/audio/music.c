@@ -69,7 +69,11 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
     );
 
     if (callback_count <= 10) {
-        printf("MUSIC: rendered %zu frames\n", frames_rendered);
+        int order = openmpt_module_get_current_order(music_state.mod);
+        int pattern = openmpt_module_get_current_pattern(music_state.mod);
+        int row = openmpt_module_get_current_row(music_state.mod);
+        printf("MUSIC: rendered %zu frames, order=%d pattern=%d row=%d\n",
+               frames_rendered, order, pattern, row);
     }
 
     /* Fill remainder with silence if we didn't get enough frames */
