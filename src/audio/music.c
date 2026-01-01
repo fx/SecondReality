@@ -31,11 +31,29 @@ static struct {
     atomic_int position_seconds_x1000; /* Fixed-point: seconds * 1000 */
 } music_state;
 
+/* Debug callback counter */
+static int callback_count = 0;
+
+/**
+ * OpenMPT logging callback for diagnosing load issues
+ */
+static void music_openmpt_log(const char *message, void *user) {
+    (void)user;
+    printf("OPENMPT: %s\n", message);
+}
+
 /**
  * Audio callback - called by Sokol Audio from audio thread.
  * Renders audio and updates position atomically.
  */
 static void music_audio_callback(float *buffer, int num_frames, int num_channels) {
+    callback_count++;
+    if (callback_count <= 10) {
+        printf("MUSIC: callback #%d, frames=%d, channels=%d, playing=%d, mod=%p\n",
+               callback_count, num_frames, num_channels,
+               atomic_load(&music_state.playing), (void*)music_state.mod);
+    }
+
     if (!music_state.mod || !atomic_load(&music_state.playing)) {
         /* Silence when not playing */
         memset(buffer, 0, (size_t)(num_frames * num_channels) * sizeof(float));
@@ -49,6 +67,10 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         (size_t)num_frames,
         buffer
     );
+
+    if (callback_count <= 10) {
+        printf("MUSIC: rendered %zu frames\n", frames_rendered);
+    }
 
     /* Fill remainder with silence if we didn't get enough frames */
     if (frames_rendered < (size_t)num_frames) {
@@ -126,7 +148,7 @@ bool music_load(const void *data, size_t size) {
     /* Load new module */
     music_state.mod = openmpt_module_create_from_memory2(
         data, size,
-        NULL, /* log_func */
+        music_openmpt_log, /* log_func */
         NULL, /* log_user */
         NULL, /* error_func */
         NULL, /* error_user */
@@ -139,6 +161,14 @@ bool music_load(const void *data, size_t size) {
         fprintf(stderr, "MUSIC: Failed to load module\n");
         return false;
     }
+
+    /* Print module info for debugging */
+    const char *title = openmpt_module_get_metadata(music_state.mod, "title");
+    const char *type_long = openmpt_module_get_metadata(music_state.mod, "type_long");
+    printf("MUSIC: Module title: %s\n", title ? title : "(null)");
+    printf("MUSIC: Module type: %s\n", type_long ? type_long : "(null)");
+    openmpt_free_string(title);
+    openmpt_free_string(type_long);
 
     /* Configure module for interpolated output */
     openmpt_module_set_render_param(
