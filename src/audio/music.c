@@ -21,7 +21,7 @@
 static struct {
     openmpt_module *mod;
     bool initialized;
-    bool playing;
+    atomic_bool playing;
 
     /* Atomic position tracking for thread-safe DIS queries */
     atomic_int current_order;
@@ -35,7 +35,7 @@ static struct {
  * Renders audio and updates position atomically.
  */
 static void music_audio_callback(float *buffer, int num_frames, int num_channels) {
-    if (!music_state.mod || !music_state.playing) {
+    if (!music_state.mod || !atomic_load(&music_state.playing)) {
         /* Silence when not playing */
         memset(buffer, 0, (size_t)(num_frames * num_channels) * sizeof(float));
         return;
@@ -55,7 +55,7 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         memset(buffer + frames_rendered * 2, 0, remaining * 2 * sizeof(float));
 
         /* Stop playback at end of module */
-        music_state.playing = false;
+        atomic_store(&music_state.playing, false);
     }
 
     /* Update position atomically for thread-safe queries */
@@ -91,7 +91,7 @@ bool music_init(void) {
 
     music_state.initialized = true;
     music_state.mod = NULL;
-    music_state.playing = false;
+    atomic_store(&music_state.playing, false);
     atomic_store(&music_state.current_order, 0);
     atomic_store(&music_state.current_pattern, 0);
     atomic_store(&music_state.current_row, 0);
@@ -211,7 +211,7 @@ bool music_load_file(const char *path) {
 
 void music_unload(void) {
     if (music_state.mod) {
-        music_state.playing = false;
+        atomic_store(&music_state.playing, false);
         openmpt_module_destroy(music_state.mod);
         music_state.mod = NULL;
     }
@@ -219,17 +219,17 @@ void music_unload(void) {
 
 void music_play(void) {
     if (music_state.mod) {
-        music_state.playing = true;
+        atomic_store(&music_state.playing, true);
     }
 }
 
 void music_pause(void) {
-    music_state.playing = false;
+    atomic_store(&music_state.playing, false);
 }
 
 void music_stop(void) {
     if (music_state.mod) {
-        music_state.playing = false;
+        atomic_store(&music_state.playing, false);
         openmpt_module_set_position_order_row(music_state.mod, 0, 0);
         atomic_store(&music_state.current_order, 0);
         atomic_store(&music_state.current_pattern, 0);
@@ -239,7 +239,7 @@ void music_stop(void) {
 }
 
 bool music_is_playing(void) {
-    return music_state.playing;
+    return atomic_load(&music_state.playing);
 }
 
 double music_get_position_seconds(void) {
