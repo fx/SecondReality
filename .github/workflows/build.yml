@@ -54,6 +54,8 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    # Windows build is experimental - libopenmpt via vcpkg has transient mirror failures
+    continue-on-error: true
 
     steps:
       - name: Checkout repository
