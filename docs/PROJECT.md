@@ -45,10 +45,10 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [x] Load MUSIC0.S3M and MUSIC1.S3M
     - [x] Implement playback position tracking for sync
     - [ ] Future: Add mutex for music_set_position/music_stop thread safety
-  - [ ] Create part loader framework
-    - [ ] Define part interface (init, update, render, cleanup)
-    - [ ] Implement part sequencing from SCRIPT
-    - [ ] Create timing/sync system
+  - [x] Create part loader framework (PR #5)
+    - [x] Define part interface (init, update, render, cleanup)
+    - [x] Implement part sequencing from SCRIPT
+    - [x] Create timing/sync system
 
 - [ ] Phase 1: Opening Sequence (Parts 1-5)
   - [ ] Port ALKU (Opening Credits)
