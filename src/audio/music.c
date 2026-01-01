@@ -72,8 +72,10 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         int order = openmpt_module_get_current_order(music_state.mod);
         int pattern = openmpt_module_get_current_pattern(music_state.mod);
         int row = openmpt_module_get_current_row(music_state.mod);
-        printf("MUSIC: rendered %zu frames, order=%d pattern=%d row=%d\n",
-               frames_rendered, order, pattern, row);
+        int speed = openmpt_module_get_current_speed(music_state.mod);
+        int tempo = openmpt_module_get_current_tempo(music_state.mod);
+        printf("MUSIC: rendered %zu frames, order=%d pattern=%d row=%d speed=%d tempo=%d\n",
+               frames_rendered, order, pattern, row, speed, tempo);
     }
 
     /* Fill remainder with silence if we didn't get enough frames */
