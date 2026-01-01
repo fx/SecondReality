@@ -24,10 +24,10 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
 ## Tasks
 
 - [ ] Phase 0: Infrastructure Setup
-  - [ ] Initialize CMake build system with Sokol
-    - [ ] Add sokol as submodule/vendor
-    - [ ] Configure native builds (Linux, macOS, Windows)
-    - [ ] Configure Emscripten/WASM build
+  - [x] Initialize CMake build system with Sokol (PR #7)
+    - [x] Add sokol as submodule/vendor
+    - [x] Configure native builds (Linux, macOS, Windows)
+    - [x] Configure Emscripten/WASM build
   - [x] Create core framework (replaces DIS) (PR #2)
     - [x] Create `src/core/dis.h` - demo interrupt server API
     - [x] Implement `dis_waitb()` - frame sync using sokol_app
