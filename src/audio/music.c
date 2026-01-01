@@ -6,6 +6,7 @@
  */
 
 #include "music.h"
+#include "sokol_log.h"
 #include "sokol_audio.h"
 #include <libopenmpt/libopenmpt.h>
 #include <stdatomic.h>
@@ -75,13 +76,14 @@ bool music_init(void) {
         return true;
     }
 
-    /* Initialize Sokol Audio */
+    /* Initialize Sokol Audio with proper logging */
     saudio_setup(&(saudio_desc){
         .sample_rate = MUSIC_SAMPLE_RATE,
         .num_channels = MUSIC_NUM_CHANNELS,
         .stream_cb = music_audio_callback,
         .buffer_frames = 2048,
         .packet_frames = 512,
+        .logger.func = slog_func,
     });
 
     if (!saudio_isvalid()) {
