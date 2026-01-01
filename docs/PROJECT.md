@@ -34,11 +34,11 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [x] Implement `dis_exit()` - clean exit handling
     - [x] Implement `dis_muscode()` - music sync interface
     - [x] Implement `dis_setcopper()` - palette/raster effects
-  - [ ] Create video subsystem
-    - [ ] Implement 320x200 framebuffer with scaling
-    - [ ] Implement 320x400 mode support
-    - [ ] Implement palette management (256 colors)
-    - [ ] Implement VGA register emulation layer
+  - [x] Create video subsystem (PR #3)
+    - [x] Implement 320x200 framebuffer with scaling
+    - [x] Implement 320x400 mode support
+    - [x] Implement palette management (256 colors)
+    - [x] Implement page flipping and horizontal scrolling
   - [ ] Integrate libopenmpt for S3M audio
     - [ ] Add libopenmpt dependency
     - [ ] Create `src/audio/music.h` API

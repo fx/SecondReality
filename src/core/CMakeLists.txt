@@ -1,4 +1,4 @@
-add_library(sokol_core STATIC sokol.c dis.c)
+add_library(sokol_core STATIC sokol.c dis.c video.c)
 target_include_directories(sokol_core PUBLIC ${SOKOL_PATH})
 
 if(EMSCRIPTEN)

@@ -2,6 +2,7 @@
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "core/dis.h"
+#include "core/video.h"
 
 static sg_pass_action pass_action;
 
@@ -13,9 +14,53 @@ static void init(void) {
         .environment = sglue_environment()
     });
 
-    /* Dark blue clear color - visible test */
+    /* Initialize video subsystem */
+    video_init();
+
+    /* Create test pattern: colored vertical bars */
+    uint8_t *fb = video_get_framebuffer();
+    for (int y = 0; y < VIDEO_HEIGHT_13H; y++) {
+        for (int x = 0; x < VIDEO_WIDTH; x++) {
+            /* 8 colored bars across the screen */
+            fb[y * VIDEO_WIDTH + x] = (uint8_t)((x / 40) * 32);
+        }
+    }
+
+    /* Set up a colorful test palette */
+    for (int i = 0; i < 256; i++) {
+        /* Create a simple rainbow palette */
+        uint8_t r, g, b;
+        if (i < 32) {
+            /* Black */
+            r = g = b = 0;
+        } else if (i < 64) {
+            /* Red */
+            r = 63; g = 0; b = 0;
+        } else if (i < 96) {
+            /* Orange */
+            r = 63; g = 32; b = 0;
+        } else if (i < 128) {
+            /* Yellow */
+            r = 63; g = 63; b = 0;
+        } else if (i < 160) {
+            /* Green */
+            r = 0; g = 63; b = 0;
+        } else if (i < 192) {
+            /* Cyan */
+            r = 0; g = 63; b = 63;
+        } else if (i < 224) {
+            /* Blue */
+            r = 0; g = 0; b = 63;
+        } else {
+            /* Magenta */
+            r = 63; g = 0; b = 63;
+        }
+        video_set_color((uint8_t)i, r, g, b);
+    }
+
+    /* Black clear color for letterboxing */
     pass_action = (sg_pass_action){
-        .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { 0.0f, 0.1f, 0.2f, 1.0f } }
+        .colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { 0.0f, 0.0f, 0.0f, 1.0f } }
     };
 }
 
@@ -27,11 +72,13 @@ static void frame(void) {
     }
 
     sg_begin_pass(&(sg_pass){ .action = pass_action, .swapchain = sglue_swapchain() });
+    video_present();
     sg_end_pass();
     sg_commit();
 }
 
 static void cleanup(void) {
+    video_shutdown();
     sg_shutdown();
 }
 
