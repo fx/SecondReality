@@ -283,7 +283,12 @@ bool music_is_playing(void) {
 
 double music_get_position_seconds(void) {
     int ms = atomic_load(&music_state.position_seconds_x1000);
-    return (double)ms / 1000.0;
+    double pos = (double)ms / 1000.0;
+    static int log_count = 0;
+    if (log_count++ < 20) {
+        printf("MUSIC: position=%.3f sec\n", pos);
+    }
+    return pos;
 }
 
 int music_get_current_order(void) {

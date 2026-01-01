@@ -401,6 +401,7 @@ static void alku_init(sr_part_t *part)
 
     /* Start at phase 0 */
     s->phase = PHASE_WAIT_SYNC1;
+    printf("ALKU: initialized, phase=%d\n", s->phase);
 }
 
 static int alku_update(sr_part_t *part, int frame_count)
@@ -408,8 +409,15 @@ static int alku_update(sr_part_t *part, int frame_count)
     alku_state_t *s = (alku_state_t *)part->user_data;
     (void)frame_count;
 
+    static int update_count = 0;
+    update_count++;
+    if (update_count <= 60) {
+        printf("ALKU: update #%d, phase=%d, sync=%d\n", update_count, s->phase, dis_sync());
+    }
+
     /* Check for exit */
     if (dis_exit()) {
+        printf("ALKU: dis_exit() returned true, exiting\n");
         return 1;
     }
 
@@ -421,6 +429,7 @@ static int alku_update(sr_part_t *part, int frame_count)
             prtc(s, 160, 120, "A");
             prtc(s, 160, 160, "Future Crew");
             prtc(s, 160, 200, "Production");
+            printf("ALKU: transitioning to phase %d\n", PHASE_INTRO1);
             s->phase = PHASE_INTRO1;
             s->frame_count = 0;
         }
@@ -434,6 +443,7 @@ static int alku_update(sr_part_t *part, int frame_count)
         if (wait_frames(s, 300)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
+        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC2);
         s->phase = PHASE_WAIT_SYNC2;
         break;
 
@@ -441,6 +451,7 @@ static int alku_update(sr_part_t *part, int frame_count)
         if (dis_sync() >= 2) {
             prtc(s, 160, 160, "First Presented");
             prtc(s, 160, 200, "at Assembly 93");
+            printf("ALKU: transitioning to phase %d\n", PHASE_INTRO2);
             s->phase = PHASE_INTRO2;
             s->frame_count = 0;
         }
@@ -453,6 +464,7 @@ static int alku_update(sr_part_t *part, int frame_count)
         if (wait_frames(s, 300)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
+        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC3);
         s->phase = PHASE_WAIT_SYNC3;
         break;
 
@@ -462,6 +474,7 @@ static int alku_update(sr_part_t *part, int frame_count)
             prtc(s, 160, 120, "in");
             prtc(s, 160, 160, "Second");
             prtc(s, 160, 200, "Reality");
+            printf("ALKU: transitioning to phase %d\n", PHASE_INTRO3);
             s->phase = PHASE_INTRO3;
             s->frame_count = 0;
         }
@@ -474,6 +487,7 @@ static int alku_update(sr_part_t *part, int frame_count)
         if (wait_frames(s, 300)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
+        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC4);
         s->phase = PHASE_WAIT_SYNC4;
         break;
 
@@ -482,6 +496,7 @@ static int alku_update(sr_part_t *part, int frame_count)
             /* Start horizon fade-in while scrolling */
             memcpy(s->fadepal, s->fade1, ALKU_PALETTE_SIZE);
             start_incremental_fade(s, s->picin, 128);
+            printf("ALKU: transitioning to phase %d\n", PHASE_HORIZON);
             s->phase = PHASE_HORIZON;
             s->scroll_pos = 1;
             s->page = 1;
@@ -495,6 +510,7 @@ static int alku_update(sr_part_t *part, int frame_count)
         do_scroll(s);
         if (s->fade_active <= 0) {
             /* Fade complete, start credits */
+            printf("ALKU: transitioning to phase %d\n", PHASE_CREDITS);
             s->phase = PHASE_CREDITS;
             s->credits_index = 0;
             s->frame_count = 60; /* Start with delay before first credit */
@@ -560,11 +576,13 @@ static int alku_update(sr_part_t *part, int frame_count)
 
         /* Check for exit condition */
         if (s->scroll_pos >= 320) {
+            printf("ALKU: transitioning to phase %d\n", PHASE_DONE);
             s->phase = PHASE_DONE;
         }
         break;
 
     case PHASE_DONE:
+        printf("ALKU: PHASE_DONE, returning exit\n");
         return 1; /* Signal exit */
     }
 
