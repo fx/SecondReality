@@ -308,8 +308,74 @@ void alku_build_glyphs(alku_state_t *state)
 
 void alku_init_palettes(alku_state_t *state)
 {
-    /* TODO: Initialize derived palettes */
-    memset(state->palette2, 0, sizeof(state->palette2));
+    int i;
+
+    /* fade1 = black (all zeros) - start of fades */
     memset(state->fade1, 0, sizeof(state->fade1));
-    memset(state->fade2, 0, sizeof(state->fade2));
+
+    /*
+     * Build palette2 (horizon + text colors) and fade2 (text colors).
+     *
+     * Original layout uses palette ranges:
+     * - 0-63: Base horizon colors (copied as-is)
+     * - 64-127: Text shade 1 (blended with palette color 1)
+     * - 128-191: Text shade 2 (blended with palette color 2)
+     * - 192-255: Text shade 3 (blended with palette color 3)
+     *
+     * The text colors in fade2 are the blend factors.
+     */
+    for (i = 0; i < ALKU_PALETTE_SIZE; i += 3) {
+        int idx = i / 3; /* Color index 0-255 */
+
+        if (idx < 64) {
+            /* Base horizon colors - copy directly */
+            state->palette2[i + 0] = state->palette[i + 0];
+            state->palette2[i + 1] = state->palette[i + 1];
+            state->palette2[i + 2] = state->palette[i + 2];
+            state->fade2[i + 0] = 0;
+            state->fade2[i + 1] = 0;
+            state->fade2[i + 2] = 0;
+        } else {
+            /* Text colors: blend base color with text shade */
+            int shade_idx = (idx >= 192) ? 3 : (idx >= 128) ? 2 : 1;
+            int base_idx = idx % 64;
+            int shade_offset = shade_idx * 3;
+            int base_offset = base_idx * 3;
+
+            /* fade2 = text color (shade color) */
+            state->fade2[i + 0] = state->palette[shade_offset + 0];
+            state->fade2[i + 1] = state->palette[shade_offset + 1];
+            state->fade2[i + 2] = state->palette[shade_offset + 2];
+
+            /* palette2 = blended color for text over horizon */
+            /* Formula: text_color * 63 + base_color * (63 - text_color) >> 6 */
+            int tr = state->palette[shade_offset + 0];
+            int tg = state->palette[shade_offset + 1];
+            int tb = state->palette[shade_offset + 2];
+            int br = state->palette[base_offset + 0];
+            int bg = state->palette[base_offset + 1];
+            int bb = state->palette[base_offset + 2];
+
+            state->palette2[i + 0] = (tr * 63 + br * (63 - tr)) >> 6;
+            state->palette2[i + 1] = (tg * 63 + bg * (63 - tg)) >> 6;
+            state->palette2[i + 2] = (tb * 63 + bb * (63 - tb)) >> 6;
+        }
+    }
+
+    /* Extend palette: colors 192-255 = copy of 0-63 (for scrolling) */
+    for (i = 192 * 3; i < ALKU_PALETTE_SIZE; i++) {
+        state->palette[i] = state->palette[i - 192 * 3];
+    }
+
+    /* Calculate fade increments (fixed-point 8.8 format) */
+    for (i = 0; i < ALKU_PALETTE_SIZE; i++) {
+        /* textin: fade from palette to palette2 in 64 steps */
+        state->textin[i] = ((int)state->palette2[i] - (int)state->palette[i]) * 256 / 64;
+
+        /* textout: fade from palette2 to palette in 64 steps */
+        state->textout[i] = ((int)state->palette[i] - (int)state->palette2[i]) * 256 / 64;
+
+        /* picin: fade from black to palette in 128 steps */
+        state->picin[i] = ((int)state->palette[i] - (int)state->fade1[i]) * 256 / 128;
+    }
 }
