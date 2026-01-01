@@ -241,11 +241,18 @@ bool music_load(const void *data, size_t size) {
     openmpt_free_string(title);
     openmpt_free_string(type_long);
 
-    /* Configure module for interpolated output */
+    /* Configure module - try disabling interpolation to debug */
     openmpt_module_set_render_param(
         music_state.mod,
         OPENMPT_MODULE_RENDER_INTERPOLATIONFILTER_LENGTH,
-        8 /* 8-tap sinc */
+        0 /* 0 = no interpolation (nearest neighbor) */
+    );
+
+    /* Set master gain to 100% */
+    openmpt_module_set_render_param(
+        music_state.mod,
+        OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL,
+        0 /* 0 dB = unity gain */
     );
 
     /* Enable looping (repeat forever) */
