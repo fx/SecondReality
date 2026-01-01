@@ -38,6 +38,67 @@ sr_part_t *alku_get_part(void)
 }
 
 /**
+ * Print text at position using XOR compositing.
+ * Font pixels are OR'd with existing framebuffer to overlay text.
+ *
+ * @param s Part state
+ * @param x Left X position
+ * @param y Top Y position
+ * @param txt Null-terminated string
+ */
+static void prt(alku_state_t *s, int x, int y, const char *txt)
+{
+    uint8_t *fb = video_get_framebuffer();
+    int screen_width = VIDEO_WIDTH;
+
+    while (*txt) {
+        unsigned char c = (unsigned char)*txt;
+        alku_glyph_t *glyph = &s->glyphs[c];
+        int glyph_x, glyph_y;
+        int sx = glyph->start;
+
+        for (glyph_x = 0; glyph_x < glyph->width; glyph_x++) {
+            for (glyph_y = 0; glyph_y < ALKU_FONT_ROWS; glyph_y++) {
+                int dst_x = x + glyph_x;
+                int dst_y = y + glyph_y;
+                uint8_t font_val = s->font[glyph_y][sx + glyph_x];
+
+                if (dst_x >= 0 && dst_x < screen_width && dst_y >= 0 && dst_y < VIDEO_HEIGHT_X) {
+                    int idx = dst_y * screen_width + dst_x;
+                    /* OR font pixel with framebuffer for XOR-like compositing */
+                    fb[idx] |= font_val;
+                }
+            }
+        }
+        x += glyph->width + 2; /* Add 2 pixels spacing between chars */
+        txt++;
+    }
+}
+
+/**
+ * Print centered text at Y position.
+ *
+ * @param s Part state
+ * @param center_x Center X position
+ * @param y Top Y position
+ * @param txt Null-terminated string
+ */
+static void prtc(alku_state_t *s, int center_x, int y, const char *txt)
+{
+    const char *t = txt;
+    int width = 0;
+
+    /* Calculate total text width */
+    while (*t) {
+        width += s->glyphs[(unsigned char)*t].width + 2;
+        t++;
+    }
+
+    /* Draw centered */
+    prt(s, center_x - width / 2, y, txt);
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
