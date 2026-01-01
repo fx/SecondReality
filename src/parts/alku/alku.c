@@ -204,6 +204,81 @@ static int do_scroll(alku_state_t *s)
 }
 
 /**
+ * Add text to the overlay buffer for XOR compositing.
+ * Text is rendered centered at given position into tbuf.
+ *
+ * @param s Part state
+ * @param center_x Center X position
+ * @param y Top Y position within tbuf
+ * @param txt Text to render
+ */
+static void addtext(alku_state_t *s, int center_x, int y, const char *txt)
+{
+    const char *t = txt;
+    int width = 0;
+    int x, gx, gy;
+
+    /* Calculate total text width */
+    while (*t) {
+        width += s->glyphs[(unsigned char)*t].width + 2;
+        t++;
+    }
+
+    /* Draw centered into tbuf */
+    x = center_x - width / 2;
+    t = txt;
+
+    while (*t) {
+        unsigned char c = (unsigned char)*t;
+        alku_glyph_t *glyph = &s->glyphs[c];
+        int sx = glyph->start;
+
+        for (gx = 0; gx < glyph->width; gx++) {
+            for (gy = 0; gy < ALKU_FONT_ROWS; gy++) {
+                int dst_x = x + gx;
+                int dst_y = y + gy;
+                uint8_t font_val = s->font[gy][sx + gx];
+
+                if (dst_x >= 0 && dst_x < ALKU_TBUF_COLS &&
+                    dst_y >= 0 && dst_y < ALKU_TBUF_ROWS) {
+                    s->tbuf[dst_y][dst_x] = font_val;
+                }
+            }
+        }
+        x += glyph->width + 2;
+        t++;
+    }
+}
+
+/**
+ * Apply text buffer to framebuffer using XOR compositing.
+ * Called during scroll to overlay credits text on horizon.
+ *
+ * @param s Part state
+ * @param scroll Current scroll position for offset calculation
+ */
+static void apply_text_overlay(alku_state_t *s, int scroll)
+{
+    uint8_t *fb = video_get_framebuffer();
+    int screen_width = VIDEO_WIDTH;
+    int x, y;
+    int fb_y_start = 100; /* Matches horizon start */
+
+    for (y = 1; y < 184 && (y + fb_y_start) < VIDEO_HEIGHT_X; y++) {
+        for (x = 0; x < 320; x++) {
+            int fb_x = (x + scroll) % screen_width;
+            int fb_idx = (y + fb_y_start) * screen_width + fb_x;
+            uint8_t text_val = s->tbuf[y][x];
+
+            if (text_val) {
+                /* XOR compositing */
+                fb[fb_idx] ^= text_val;
+            }
+        }
+    }
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
