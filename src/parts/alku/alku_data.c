@@ -246,10 +246,64 @@ int alku_load_horizon(alku_state_t *state)
     return 0;
 }
 
+/* Character order in the font sheet - matches original */
+static const char *fonaorder =
+    "ABCDEFGHIJKLMNOPQRSTUVWXabcdefghijklmnopqrstuvwxyz0123456789!?,.:()+-*='";
+
 void alku_build_glyphs(alku_state_t *state)
 {
-    /* TODO: Build glyph lookup from font data */
+    const char *order = fonaorder;
+    int x = 0;
+    int y, start, end;
+
     memset(state->glyphs, 0, sizeof(state->glyphs));
+
+    /*
+     * Scan through font columns to find character boundaries.
+     * A character starts when we hit a non-zero column and ends
+     * when we hit an all-zero column again.
+     */
+    while (x < ALKU_FONT_COLS && *order) {
+        /* Skip empty columns to find start of next glyph */
+        while (x < ALKU_FONT_COLS) {
+            int has_pixels = 0;
+            for (y = 0; y < ALKU_FONT_ROWS; y++) {
+                if (state->font[y][x]) {
+                    has_pixels = 1;
+                    break;
+                }
+            }
+            if (has_pixels) break;
+            x++;
+        }
+        if (x >= ALKU_FONT_COLS) break;
+
+        start = x;
+
+        /* Scan to find end of glyph (next all-zero column) */
+        while (x < ALKU_FONT_COLS) {
+            int has_pixels = 0;
+            for (y = 0; y < ALKU_FONT_ROWS; y++) {
+                if (state->font[y][x]) {
+                    has_pixels = 1;
+                    break;
+                }
+            }
+            if (!has_pixels) break;
+            x++;
+        }
+
+        end = x;
+
+        /* Record glyph position and width */
+        state->glyphs[(unsigned char)*order].start = start;
+        state->glyphs[(unsigned char)*order].width = end - start;
+        order++;
+    }
+
+    /* Space character - fixed width at end of font */
+    state->glyphs[(unsigned char)' '].start = ALKU_FONT_COLS - 20;
+    state->glyphs[(unsigned char)' '].width = 16;
 }
 
 void alku_init_palettes(alku_state_t *state)
