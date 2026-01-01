@@ -279,6 +279,32 @@ static void apply_text_overlay(alku_state_t *s, int scroll)
 }
 
 /**
+ * Clear text from framebuffer by masking out text color bits.
+ * Removes text overlay by ANDing with 0x3F to keep only base colors.
+ *
+ * @param s Part state
+ */
+static void fonapois(alku_state_t *s)
+{
+    uint8_t *fb = video_get_framebuffer();
+    int screen_width = VIDEO_WIDTH;
+    int x, y;
+    int fb_y_start = 64;  /* Text area starts at line 64 */
+    int fb_y_end = 64 + 256; /* Text area is 256 lines */
+
+    for (y = fb_y_start; y < fb_y_end && y < VIDEO_HEIGHT_X; y++) {
+        for (x = 0; x < screen_width; x++) {
+            int idx = y * screen_width + x;
+            /* Mask out text bits (keep only lower 6 bits = base color) */
+            fb[idx] &= 0x3F;
+        }
+    }
+
+    /* Also clear the text overlay buffer */
+    memset(s->tbuf, 0, sizeof(s->tbuf));
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
