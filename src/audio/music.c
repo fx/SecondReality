@@ -47,6 +47,12 @@ static void music_openmpt_log(const char *message, void *user) {
 #define MUSIC_TEST_TONE 0
 static double test_tone_phase = 0.0;
 
+/* Debug: write first 5 seconds to WAV file */
+static FILE *debug_wav = NULL;
+static int debug_samples_written = 0;
+#define DEBUG_WAV_SECONDS 5
+#define DEBUG_WAV_SAMPLES (48000 * DEBUG_WAV_SECONDS * 2)
+
 /**
  * Audio callback - called by Sokol Audio from audio thread.
  * Renders audio and updates position atomically.
@@ -103,6 +109,32 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
 
         printf("MUSIC: rendered %zu frames, order=%d row=%d speed=%d tempo=%d samples=[%.3f,%.3f]\n",
                frames_rendered, order, row, speed, tempo, min_val, max_val);
+    }
+
+    /* Write to debug WAV file */
+    if (debug_samples_written < DEBUG_WAV_SAMPLES) {
+        if (!debug_wav) {
+            debug_wav = fopen("debug_audio.raw", "wb");
+            if (debug_wav) printf("MUSIC: Writing debug audio to debug_audio.raw\n");
+        }
+        if (debug_wav) {
+            int samples_to_write = num_frames * 2;
+            if (debug_samples_written + samples_to_write > DEBUG_WAV_SAMPLES) {
+                samples_to_write = DEBUG_WAV_SAMPLES - debug_samples_written;
+            }
+            /* Convert float to int16 for raw PCM */
+            for (int i = 0; i < samples_to_write; i++) {
+                int16_t sample = (int16_t)(buffer[i] * 32767.0f);
+                fwrite(&sample, sizeof(int16_t), 1, debug_wav);
+            }
+            debug_samples_written += samples_to_write;
+            if (debug_samples_written >= DEBUG_WAV_SAMPLES) {
+                fclose(debug_wav);
+                debug_wav = NULL;
+                printf("MUSIC: Debug audio written (5 seconds)\n");
+                printf("MUSIC: Play with: aplay -f S16_LE -r 48000 -c 2 debug_audio.raw\n");
+            }
+        }
     }
 
     /* Fill remainder with silence if we didn't get enough frames */
