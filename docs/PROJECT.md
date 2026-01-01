@@ -51,13 +51,13 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [x] Create timing/sync system
 
 - [ ] Phase 1: Opening Sequence (Parts 1-5)
-  - [ ] Port ALKU (Opening Credits)
-    - [ ] Port MAIN.C to src/parts/alku/
-    - [ ] Convert COPPER.ASM palette effects to shaders
-    - [ ] Load FONA font data (FONA.INC → runtime load)
-    - [ ] Load horizon images (HOI.IN0, HOI.IN1)
-    - [ ] Implement text fade-in with scrolling background
-    - [ ] Test: "A FUTURE CREW production" text displays correctly
+  - [x] Port ALKU (Opening Credits) (PR #8)
+    - [x] Port MAIN.C to src/parts/alku/
+    - [x] Convert COPPER.ASM palette effects to shaders
+    - [x] Load FONA font data (FONA.INC → runtime load)
+    - [x] Load horizon images (HOI.IN0, HOI.IN1)
+    - [x] Implement text fade-in with scrolling background
+    - [x] Test: "A FUTURE CREW production" text displays correctly
   - [ ] Port BEG (Title Screen)
     - [ ] Port BEG.C to src/parts/beg/
     - [ ] Load SRTITLE.LBM title image
