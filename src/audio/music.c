@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 /* Audio configuration */
 #define MUSIC_SAMPLE_RATE 48000
@@ -42,6 +43,10 @@ static void music_openmpt_log(const char *message, void *user) {
     printf("OPENMPT: %s\n", message);
 }
 
+/* Test mode: set to 1 to play a 440Hz test tone instead of module */
+#define MUSIC_TEST_TONE 1
+static double test_tone_phase = 0.0;
+
 /**
  * Audio callback - called by Sokol Audio from audio thread.
  * Renders audio and updates position atomically.
@@ -53,6 +58,20 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
                callback_count, num_frames, num_channels,
                atomic_load(&music_state.playing), (void*)music_state.mod);
     }
+
+#if MUSIC_TEST_TONE
+    /* Generate 440Hz test tone */
+    double freq = 440.0;
+    double sample_rate = (double)saudio_sample_rate();
+    for (int i = 0; i < num_frames; i++) {
+        float sample = 0.3f * (float)sin(test_tone_phase * 2.0 * 3.14159265359);
+        buffer[i * 2 + 0] = sample; /* Left */
+        buffer[i * 2 + 1] = sample; /* Right */
+        test_tone_phase += freq / sample_rate;
+        if (test_tone_phase > 1.0) test_tone_phase -= 1.0;
+    }
+    return;
+#endif
 
     if (!music_state.mod || !atomic_load(&music_state.playing)) {
         /* Silence when not playing */
