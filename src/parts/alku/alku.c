@@ -122,6 +122,58 @@ static void dofade(alku_state_t *s, const uint8_t *pal1, const uint8_t *pal2)
 }
 
 /**
+ * Start an incremental (non-blocking) palette fade.
+ * The fade runs during update ticks while scrolling continues.
+ *
+ * @param s Part state
+ * @param increments Fade increment table (768 int16_t values, 8.8 fixed-point)
+ * @param steps Total number of steps for fade (64 or 128)
+ */
+static void start_incremental_fade(alku_state_t *s, const int16_t *increments, int steps)
+{
+    /* Copy current fadepal as starting point */
+    /* (fadepal should be set before calling this) */
+    s->fade_active = steps;
+    s->fade_pos = 0;
+
+    /* Fade increments are stored in state, we just remember the pointer */
+    /* For simplicity, we'll apply increments directly in tick_fade */
+    (void)increments; /* Handled via state->picin/textin/textout */
+}
+
+/**
+ * Tick the incremental fade by one step.
+ * Called each frame during scrolling to update palette smoothly.
+ *
+ * @param s Part state
+ * @param increments Fade increment table to use
+ * @return 1 if fade still active, 0 if complete
+ */
+static int tick_fade(alku_state_t *s, const int16_t *increments)
+{
+    int i;
+
+    if (s->fade_active <= 0) {
+        return 0;
+    }
+
+    /* Apply one step of increments (8.8 fixed-point) */
+    for (i = 0; i < ALKU_PALETTE_SIZE; i++) {
+        int val = s->fadepal[i] * 256 + increments[i];
+        if (val < 0) val = 0;
+        if (val > 63 * 256) val = 63 * 256;
+        s->fadepal[i] = val >> 8;
+    }
+
+    video_set_palette(s->fadepal);
+
+    s->fade_active--;
+    s->fade_pos++;
+
+    return s->fade_active > 0;
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
