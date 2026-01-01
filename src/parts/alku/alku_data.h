@@ -69,9 +69,6 @@ typedef struct {
     /* Text overlay buffer (186x352) */
     uint8_t tbuf[ALKU_TBUF_ROWS][ALKU_TBUF_COLS];
 
-    /* Scroll difference table for XOR updates */
-    int dtau[30000];
-
     /* Scroll state */
     int scroll_pos;         /* Current scroll position (0-320) */
     int page;               /* Double buffer page (0 or 1) */

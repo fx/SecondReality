@@ -8,6 +8,7 @@
 #include "alku_data.h"
 #include "dis.h"
 #include "video.h"
+#include <stdio.h>
 #include <string.h>
 
 /* Static state for the part */
@@ -382,8 +383,16 @@ static void alku_init(sr_part_t *part)
     video_set_mode(VIDEO_MODE_X);
 
     /* Load data files */
-    alku_load_font(s);
-    alku_load_horizon(s);
+    if (alku_load_font(s) != 0) {
+        fprintf(stderr, "alku: failed to load font data\n");
+        part->state = SR_PART_STATE_STOPPED;
+        return;
+    }
+    if (alku_load_horizon(s) != 0) {
+        fprintf(stderr, "alku: failed to load horizon data\n");
+        part->state = SR_PART_STATE_STOPPED;
+        return;
+    }
     alku_build_glyphs(s);
     alku_init_palettes(s);
 

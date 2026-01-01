@@ -44,6 +44,8 @@ static int parse_db_line(const char *line, uint8_t *buf, int max_bytes)
             val = val * 10 + (*p - '0');
             p++;
         }
+        /* Clamp to uint8_t range to prevent overflow */
+        if (val > 255) val = 255;
         buf[count++] = (uint8_t)val;
 
         /* Skip comma */
@@ -206,13 +208,21 @@ int alku_load_horizon(alku_state_t *state)
         /* Simpler approach: just copy data linearly and let rendering handle it */
         /* The original uses a custom outline() function for Mode X */
         /* For our linear framebuffer, we copy 640 pixels per line */
+
+        /* Validate data_size is sufficient for plane calculation */
+        if (data_size < 4) {
+            fprintf(stderr, "alku: HOI.IN0 data too small (%d bytes)\n", data_size);
+            free(raw_data);
+            return -1;
+        }
+
         int pixels_available = data_size;
+        int plane_stride = data_size / 4;
         for (y = 0; y < ALKU_HORIZON_HEIGHT && y * 640 < pixels_available; y++) {
             for (x = 0; x < 640 && (y * 640 + x) < pixels_available; x++) {
                 /* Simple 4-plane deinterleave: pixel x uses plane (x & 3) */
                 int plane_offset = x & 3;
                 int byte_in_plane = x >> 2;
-                int plane_stride = data_size / 4;
                 int src_idx = plane_offset * plane_stride + y * (640 / 4) + byte_in_plane;
                 if (src_idx < data_size) {
                     state->horizon[y * ALKU_HORIZON_WIDTH + x] = planar[src_idx];
@@ -223,17 +233,22 @@ int alku_load_horizon(alku_state_t *state)
 
     /* Load HOI.IN1 for lower half */
     loaded = load_db_file("HOI.IN1", raw_data, 256 * 1024);
+    if (loaded < ALKU_HORIZON_HEADER) {
+        fprintf(stderr, "alku: failed to load HOI.IN1 (got %d bytes)\n", loaded);
+        free(raw_data);
+        return -1;
+    }
     if (loaded > ALKU_HORIZON_HEADER) {
         uint8_t *planar = raw_data + ALKU_HORIZON_HEADER;
         int data_size = loaded - ALKU_HORIZON_HEADER;
         int pixels_available = data_size;
         int y_offset = ALKU_HORIZON_HEIGHT; /* Start at line 150 */
+        int plane_stride = data_size / 4;
 
         for (y = 0; y < ALKU_HORIZON_HEIGHT && y * 640 < pixels_available; y++) {
             for (x = 0; x < 640 && (y * 640 + x) < pixels_available; x++) {
                 int plane_offset = x & 3;
                 int byte_in_plane = x >> 2;
-                int plane_stride = data_size / 4;
                 int src_idx = plane_offset * plane_stride + y * (640 / 4) + byte_in_plane;
                 if (src_idx < data_size) {
                     state->horizon[(y + y_offset) * ALKU_HORIZON_WIDTH + x] = planar[src_idx];
