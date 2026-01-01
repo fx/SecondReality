@@ -339,6 +339,35 @@ static void render_horizon(alku_state_t *s)
     }
 }
 
+/* Animation phase constants */
+#define PHASE_WAIT_SYNC1    0   /* Wait for sync 1 */
+#define PHASE_INTRO1        1   /* "A" / "Future Crew" / "Production" */
+#define PHASE_WAIT_SYNC2    2   /* Wait for sync 2 */
+#define PHASE_INTRO2        3   /* "First Presented" / "at Assembly 93" */
+#define PHASE_WAIT_SYNC3    4   /* Wait for sync 3 */
+#define PHASE_INTRO3        5   /* Special symbols display */
+#define PHASE_WAIT_SYNC4    6   /* Wait for sync 4 */
+#define PHASE_HORIZON       7   /* Fade in horizon + scroll */
+#define PHASE_CREDITS       8   /* Scrolling credits */
+#define PHASE_DONE          9   /* Exit */
+
+/**
+ * Wait helper - non-blocking frame wait.
+ * @param s Part state
+ * @param frames Frames to wait
+ * @return 1 if still waiting, 0 if done
+ */
+static int wait_frames(alku_state_t *s, int frames)
+{
+    if (s->frame_count < frames) {
+        s->frame_count++;
+        dis_waitb();
+        return 1;
+    }
+    s->frame_count = 0;
+    return 0;
+}
+
 static void alku_init(sr_part_t *part)
 {
     alku_state_t *s = (alku_state_t *)part->user_data;
@@ -360,6 +389,9 @@ static void alku_init(sr_part_t *part)
 
     /* Start with black palette */
     video_set_palette(s->fade1);
+
+    /* Start at phase 0 */
+    s->phase = PHASE_WAIT_SYNC1;
 }
 
 static int alku_update(sr_part_t *part, int frame_count)
@@ -369,12 +401,162 @@ static int alku_update(sr_part_t *part, int frame_count)
 
     /* Check for exit */
     if (dis_exit()) {
-        return 1; /* Signal to advance to next part */
+        return 1;
     }
 
-    /* Exit when scroll reaches 320 */
-    if (s->scroll_pos >= 320) {
-        return 1;
+    switch (s->phase) {
+    case PHASE_WAIT_SYNC1:
+        /* Wait for music sync 1 */
+        if (dis_sync() >= 1) {
+            /* Display intro text 1 */
+            prtc(s, 160, 120, "A");
+            prtc(s, 160, 160, "Future Crew");
+            prtc(s, 160, 200, "Production");
+            s->phase = PHASE_INTRO1;
+            s->frame_count = 0;
+        }
+        break;
+
+    case PHASE_INTRO1:
+        /* Fade in text, wait, fade out */
+        if (s->frame_count == 0) {
+            dofade(s, s->fade1, s->fade2);
+        }
+        if (wait_frames(s, 300)) break;
+        dofade(s, s->fade2, s->fade1);
+        fonapois(s);
+        s->phase = PHASE_WAIT_SYNC2;
+        break;
+
+    case PHASE_WAIT_SYNC2:
+        if (dis_sync() >= 2) {
+            prtc(s, 160, 160, "First Presented");
+            prtc(s, 160, 200, "at Assembly 93");
+            s->phase = PHASE_INTRO2;
+            s->frame_count = 0;
+        }
+        break;
+
+    case PHASE_INTRO2:
+        if (s->frame_count == 0) {
+            dofade(s, s->fade1, s->fade2);
+        }
+        if (wait_frames(s, 300)) break;
+        dofade(s, s->fade2, s->fade1);
+        fonapois(s);
+        s->phase = PHASE_WAIT_SYNC3;
+        break;
+
+    case PHASE_WAIT_SYNC3:
+        if (dis_sync() >= 3) {
+            /* Note: Original shows special symbols, we use placeholder */
+            prtc(s, 160, 120, "in");
+            prtc(s, 160, 160, "Second");
+            prtc(s, 160, 200, "Reality");
+            s->phase = PHASE_INTRO3;
+            s->frame_count = 0;
+        }
+        break;
+
+    case PHASE_INTRO3:
+        if (s->frame_count == 0) {
+            dofade(s, s->fade1, s->fade2);
+        }
+        if (wait_frames(s, 300)) break;
+        dofade(s, s->fade2, s->fade1);
+        fonapois(s);
+        s->phase = PHASE_WAIT_SYNC4;
+        break;
+
+    case PHASE_WAIT_SYNC4:
+        if (dis_sync() >= 4) {
+            /* Start horizon fade-in while scrolling */
+            memcpy(s->fadepal, s->fade1, ALKU_PALETTE_SIZE);
+            start_incremental_fade(s, s->picin, 128);
+            s->phase = PHASE_HORIZON;
+            s->scroll_pos = 1;
+            s->page = 1;
+            s->frame_count = 0;
+        }
+        break;
+
+    case PHASE_HORIZON:
+        /* Fade in horizon while scrolling */
+        tick_fade(s, s->picin);
+        do_scroll(s);
+        if (s->fade_active <= 0) {
+            /* Fade complete, start credits */
+            s->phase = PHASE_CREDITS;
+            s->credits_index = 0;
+            s->frame_count = 60; /* Start with delay before first credit */
+        }
+        break;
+
+    case PHASE_CREDITS:
+        /* Continue scrolling, show credits at intervals */
+        do_scroll(s);
+
+        /* Check if time to show next credit */
+        if (s->frame_count == 0 && s->credits_index < 5) {
+            /* Clear previous text and prepare new */
+            memset(s->tbuf, 0, sizeof(s->tbuf));
+
+            switch (s->credits_index) {
+            case 0:
+                addtext(s, 160, 50, "Graphics");
+                addtext(s, 160, 90, "Marvel");
+                addtext(s, 160, 130, "Pixel");
+                break;
+            case 1:
+                addtext(s, 160, 50, "Music");
+                addtext(s, 160, 90, "Purple Motion");
+                addtext(s, 160, 130, "Skaven");
+                break;
+            case 2:
+                addtext(s, 160, 30, "Code");
+                addtext(s, 160, 70, "Psi");
+                addtext(s, 160, 110, "Trug");
+                addtext(s, 160, 148, "Wildfire");
+                break;
+            case 3:
+                addtext(s, 160, 50, "Additional Design");
+                addtext(s, 160, 90, "Abyss");
+                addtext(s, 160, 130, "Gore");
+                break;
+            case 4:
+                /* Empty - just continue scrolling */
+                break;
+            }
+
+            /* Start text fade in */
+            memcpy(s->fadepal, s->palette, ALKU_PALETTE_SIZE);
+            start_incremental_fade(s, s->textin, 64);
+            s->credits_index++;
+        }
+
+        /* Tick text fade */
+        if (s->fade_active > 0) {
+            tick_fade(s, s->textin);
+        }
+
+        /* Advance frame counter for credit timing */
+        if (s->frame_count > 0) {
+            s->frame_count--;
+        } else if (s->credits_index <= 5) {
+            /* Time for next credit after sync with scroll */
+            if ((s->scroll_pos & 1) == 0 && dis_sync() >= 4 + s->credits_index) {
+                s->frame_count = 0; /* Trigger next credit */
+            }
+        }
+
+        /* Check for exit condition */
+        if (s->scroll_pos >= 320) {
+            s->phase = PHASE_DONE;
+        }
+        break;
+
+    case PHASE_DONE:
+        return 1; /* Signal exit */
     }
 
     return 0;
@@ -384,8 +566,13 @@ static void alku_render(sr_part_t *part)
 {
     alku_state_t *s = (alku_state_t *)part->user_data;
 
-    /* Render horizon background */
+    /* Render horizon background (always, even if black) */
     render_horizon(s);
+
+    /* Apply text overlay during credits phase */
+    if (s->phase == PHASE_CREDITS || s->phase == PHASE_HORIZON) {
+        apply_text_overlay(s, s->scroll_pos);
+    }
 }
 
 static void alku_cleanup(sr_part_t *part)
