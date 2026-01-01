@@ -177,16 +177,25 @@ bool music_load(const void *data, size_t size) {
         8 /* 8-tap sinc */
     );
 
+    /* Enable looping (repeat forever) */
+    openmpt_module_set_repeat_count(music_state.mod, -1);
+
     /* Reset position */
     atomic_store(&music_state.current_order, 0);
     atomic_store(&music_state.current_pattern, 0);
     atomic_store(&music_state.current_row, 0);
     atomic_store(&music_state.position_seconds_x1000, 0);
 
+    /* Print detailed module info */
+    int num_channels = openmpt_module_get_num_channels(music_state.mod);
+    int num_samples = openmpt_module_get_num_samples(music_state.mod);
+    int num_instruments = openmpt_module_get_num_instruments(music_state.mod);
     printf("MUSIC: Module loaded (duration: %.1f sec, orders: %d, patterns: %d)\n",
            music_get_duration(),
            music_get_num_orders(),
            music_get_num_patterns());
+    printf("MUSIC: channels: %d, samples: %d, instruments: %d\n",
+           num_channels, num_samples, num_instruments);
 
     return true;
 }
