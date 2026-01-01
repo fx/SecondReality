@@ -129,10 +129,10 @@ static struct {
 /* Rebuild RGBA lookup table from palette */
 static void rebuild_rgba_lut(void) {
     for (int i = 0; i < 256; i++) {
-        /* VGA uses 6-bit color (0-63), convert to 8-bit (0-255) */
-        uint8_t r6 = video_state.palette[i * 3 + 0];
-        uint8_t g6 = video_state.palette[i * 3 + 1];
-        uint8_t b6 = video_state.palette[i * 3 + 2];
+        /* VGA uses 6-bit color (0-63), mask to prevent overflow */
+        uint8_t r6 = video_state.palette[i * 3 + 0] & 0x3F;
+        uint8_t g6 = video_state.palette[i * 3 + 1] & 0x3F;
+        uint8_t b6 = video_state.palette[i * 3 + 2] & 0x3F;
         /* Expand 6-bit to 8-bit: (val << 2) | (val >> 4) */
         uint8_t r = (r6 << 2) | (r6 >> 4);
         uint8_t g = (g6 << 2) | (g6 >> 4);
@@ -184,12 +184,19 @@ void video_init(void) {
         },
         .label = "video_fb"
     });
+    if (sg_query_image_state(video_state.image) != SG_RESOURCESTATE_VALID) {
+        return; /* Image creation failed */
+    }
 
     /* Create texture view for sampling */
     video_state.texture_view = sg_make_view(&(sg_view_desc){
         .texture.image = video_state.image,
         .label = "video_tex_view"
     });
+    if (sg_query_view_state(video_state.texture_view) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_image(video_state.image);
+        return; /* View creation failed */
+    }
 
     /* Create sampler with nearest filtering for crisp pixels */
     video_state.sampler = sg_make_sampler(&(sg_sampler_desc){
@@ -199,6 +206,11 @@ void video_init(void) {
         .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
         .label = "video_smp"
     });
+    if (sg_query_sampler_state(video_state.sampler) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_view(video_state.texture_view);
+        sg_destroy_image(video_state.image);
+        return; /* Sampler creation failed */
+    }
 
     /* Create shader */
     video_state.shader = sg_make_shader(&(sg_shader_desc){
@@ -223,6 +235,12 @@ void video_init(void) {
         },
         .label = "video_shd"
     });
+    if (sg_query_shader_state(video_state.shader) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_sampler(video_state.sampler);
+        sg_destroy_view(video_state.texture_view);
+        sg_destroy_image(video_state.image);
+        return; /* Shader creation failed */
+    }
 
     /* Create pipeline */
     video_state.pipeline = sg_make_pipeline(&(sg_pipeline_desc){
@@ -230,6 +248,13 @@ void video_init(void) {
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .label = "video_pip"
     });
+    if (sg_query_pipeline_state(video_state.pipeline) != SG_RESOURCESTATE_VALID) {
+        sg_destroy_shader(video_state.shader);
+        sg_destroy_sampler(video_state.sampler);
+        sg_destroy_view(video_state.texture_view);
+        sg_destroy_image(video_state.image);
+        return; /* Pipeline creation failed */
+    }
 
     video_state.initialized = 1;
 }
@@ -265,11 +290,17 @@ void video_clear(uint8_t color) {
 }
 
 void video_set_palette(const uint8_t palette[768]) {
+    if (!palette) {
+        return;
+    }
     memcpy(video_state.palette, palette, 768);
     video_state.palette_dirty = 1;
 }
 
 void video_set_palette_range(uint8_t start, uint8_t count, const uint8_t *data) {
+    if (!data) {
+        return;
+    }
     if (start + count > 256) {
         count = 256 - start;
     }
@@ -285,10 +316,20 @@ void video_set_color(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void video_get_palette(uint8_t palette[768]) {
+    if (!palette) {
+        return;
+    }
     memcpy(palette, video_state.palette, 768);
 }
 
 void video_set_start(uint16_t offset) {
+    /* Clamp to valid framebuffer range to prevent buffer over-read */
+    int max_offset = (video_state.mode == VIDEO_MODE_X)
+                     ? (FB_SIZE - (VIDEO_WIDTH * VIDEO_HEIGHT_X))
+                     : (FB_SIZE - (VIDEO_WIDTH * VIDEO_HEIGHT_13H));
+    if (offset > max_offset) {
+        offset = max_offset;
+    }
     video_state.start_offset = offset;
 }
 
