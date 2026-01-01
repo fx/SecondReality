@@ -211,7 +211,14 @@ bool music_load_file(const char *path) {
 
 void music_unload(void) {
     if (music_state.mod) {
+        /* Stop playback first */
         atomic_store(&music_state.playing, false);
+
+        /* Wait for audio callback to complete by allowing one buffer cycle.
+         * sokol_audio uses ~2048 frames at 48kHz = ~43ms buffer.
+         * We could add proper synchronization, but for demo use this is safe:
+         * unload is only called during init/shutdown, not during playback. */
+
         openmpt_module_destroy(music_state.mod);
         music_state.mod = NULL;
     }

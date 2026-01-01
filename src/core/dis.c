@@ -78,7 +78,8 @@ int dis_muscode(int code) {
 }
 
 int dis_musplus(void) {
-    /* Returns pattern*64 + row for sync calculations */
+    /* Returns order*64 + row for sync calculations.
+     * In tracker terms: order is position in pattern sequence. */
     int order = music_get_current_order();
     int row = music_get_current_row();
     return order * 64 + row;
