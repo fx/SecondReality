@@ -189,16 +189,21 @@ static void init(void) {
     };
 }
 
+static int frame_count = 0;
+
 static void frame(void) {
     dis_frame_tick();
+    frame_count++;
 
     if (dis_exit()) {
+        printf("[main] frame %d: dis_exit() returned true, quitting\n", frame_count);
         sapp_request_quit();
         return;
     }
 
     /* Check if demo sequence is complete */
     if (!part_loader_is_running()) {
+        printf("[main] frame %d: part_loader_is_running() returned false, quitting\n", frame_count);
         sapp_request_quit();
         return;
     }
