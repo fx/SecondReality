@@ -1,8 +1,9 @@
 add_subdirectory(core)
 add_subdirectory(audio)
+add_subdirectory(parts/alku)
 
 add_executable(SecondReality main.c)
-target_link_libraries(SecondReality PRIVATE sokol_core audio)
+target_link_libraries(SecondReality PRIVATE sokol_core audio alku)
 target_include_directories(SecondReality PRIVATE ${SOKOL_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(EMSCRIPTEN)
