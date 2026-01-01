@@ -52,30 +52,19 @@ jobs:
       - name: Build
         run: cmake --build build
 
-  build-windows:
-    runs-on: windows-latest
-    # Windows build is experimental - libopenmpt via vcpkg has transient mirror failures
-    continue-on-error: true
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: '01f602195983451bc83e72f4214af2cbc495aa94'
-
-      - name: Install dependencies
-        run: vcpkg install libopenmpt:x64-windows
-
-      - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-
-      - name: Build
-        run: cmake --build build --config Release
+  # TODO: Re-enable Windows build once vcpkg/MSYS2 mirror issues are resolved
+  # build-windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
+  #     - uses: lukka/run-vcpkg@v11
+  #       with:
+  #         vcpkgGitCommitId: '<update-to-latest>'
+  #     - run: vcpkg install libopenmpt:x64-windows
+  #     - run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+  #     - run: cmake --build build --config Release
 
   build-emscripten:
     runs-on: ubuntu-latest
