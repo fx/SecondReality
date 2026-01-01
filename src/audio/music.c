@@ -60,10 +60,10 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         return;
     }
 
-    /* Render audio */
+    /* Render audio - use actual sample rate from audio system */
     size_t frames_rendered = openmpt_module_read_interleaved_float_stereo(
         music_state.mod,
-        MUSIC_SAMPLE_RATE,
+        saudio_sample_rate(),
         (size_t)num_frames,
         buffer
     );
@@ -121,7 +121,13 @@ bool music_init(void) {
     atomic_store(&music_state.current_row, 0);
     atomic_store(&music_state.position_seconds_x1000, 0);
 
-    printf("MUSIC: Initialized (sample rate: %d Hz)\n", saudio_sample_rate());
+    int actual_rate = saudio_sample_rate();
+    int actual_channels = saudio_channels();
+    printf("MUSIC: Initialized (requested: %d Hz %d ch, actual: %d Hz %d ch)\n",
+           MUSIC_SAMPLE_RATE, MUSIC_NUM_CHANNELS, actual_rate, actual_channels);
+    if (actual_rate != MUSIC_SAMPLE_RATE) {
+        printf("MUSIC: WARNING - sample rate mismatch! Audio may sound wrong.\n");
+    }
     return true;
 }
 
