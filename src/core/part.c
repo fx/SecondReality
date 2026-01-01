@@ -10,8 +10,11 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Maximum number of parts that can be registered */
-#define PART_REGISTRY_MAX 32
+/**
+ * Maximum number of parts that can be registered.
+ * Derived from SR_PART_COUNT with headroom for test/debug parts.
+ */
+#define PART_REGISTRY_MAX (SR_PART_COUNT + 7)
 
 /* Static state */
 static sr_part_t *s_registry[PART_REGISTRY_MAX];
@@ -35,6 +38,9 @@ static void part_clear_video(void) {
 
 /**
  * Transition to a new part.
+ *
+ * @param from_index Index of the part we are transitioning from, or -1 if starting.
+ * @param to_index   Index of the part we are transitioning to.
  */
 static void part_transition(int from_index, int to_index) {
     printf("[part] Transitioning from %d to %d\n", from_index, to_index);
@@ -80,12 +86,12 @@ void part_loader_shutdown(void) {
 
 int part_loader_register(sr_part_t *part) {
     if (!part) {
-        printf("[part] Error: NULL part pointer\n");
+        printf("PART: ERROR - NULL part pointer\n");
         return -1;
     }
 
     if (s_registry_count >= PART_REGISTRY_MAX) {
-        printf("[part] Error: Registry full (max %d parts)\n", PART_REGISTRY_MAX);
+        printf("PART: ERROR - Registry full (max %d parts)\n", PART_REGISTRY_MAX);
         return -1;
     }
 
@@ -99,7 +105,7 @@ int part_loader_register(sr_part_t *part) {
 
 int part_loader_start(int start_index) {
     if (start_index < 0 || start_index >= s_registry_count) {
-        printf("[part] Error: Invalid start index %d (count=%d)\n", start_index, s_registry_count);
+        printf("PART: ERROR - Invalid start index %d (count=%d)\n", start_index, s_registry_count);
         return -1;
     }
 
