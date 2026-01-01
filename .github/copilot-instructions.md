@@ -13,4 +13,4 @@
 
 - C99 standard
 - Function comments use doxygen-style `/** */`
-- Error messages format: "DIS: ERROR ..." or "DIS: WARNING ..."
+- Error messages format: Each subsystem uses its own prefix (e.g., "DIS: ERROR ...", "PART: ERROR ...", "VIDEO: ERROR ..."). Do not suggest changing PART: to DIS: - the part loader is a separate subsystem.
