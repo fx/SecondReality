@@ -209,6 +209,13 @@ bool music_load(const void *data, size_t size) {
     printf("MUSIC: channels: %d, samples: %d, instruments: %d\n",
            num_channels, num_samples, num_instruments);
 
+    /* Print first few sample names to verify they loaded */
+    for (int i = 0; i < num_samples && i < 5; i++) {
+        const char *name = openmpt_module_get_sample_name(music_state.mod, i);
+        printf("MUSIC: sample %d: %s\n", i, name ? name : "(null)");
+        openmpt_free_string(name);
+    }
+
     return true;
 }
 
