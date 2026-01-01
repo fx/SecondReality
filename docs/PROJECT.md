@@ -44,6 +44,7 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [x] Create `src/audio/music.h` API
     - [x] Load MUSIC0.S3M and MUSIC1.S3M
     - [x] Implement playback position tracking for sync
+    - [ ] Future: Add mutex for music_set_position/music_stop thread safety
   - [ ] Create part loader framework
     - [ ] Define part interface (init, update, render, cleanup)
     - [ ] Implement part sequencing from SCRIPT
