@@ -174,6 +174,36 @@ static int tick_fade(alku_state_t *s, const int16_t *increments)
 }
 
 /**
+ * Perform one scroll step.
+ * Original scrolls 1 pixel every SCRLF (9) frames.
+ *
+ * @param s Part state
+ * @return 1 if scroll position advanced, 0 if waiting
+ */
+static int do_scroll(alku_state_t *s)
+{
+    s->frame_count++;
+
+    if (s->frame_count < ALKU_SCROLL_RATE) {
+        return 0; /* Not yet time to scroll */
+    }
+
+    s->frame_count -= ALKU_SCROLL_RATE;
+
+    /* Advance scroll position */
+    s->scroll_pos++;
+
+    /* Toggle page for double buffering */
+    s->page ^= 1;
+
+    /* Update video display offset for hardware scrolling simulation */
+    video_set_start(s->scroll_pos / 4 + s->page * 88);
+    video_set_hscroll((s->scroll_pos & 3) * 2);
+
+    return 1;
+}
+
+/**
  * Copy horizon image to framebuffer with double buffering.
  * Uses the current scroll position and page for Mode X style display.
  */
