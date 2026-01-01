@@ -16,6 +16,7 @@ else()
     pkg_check_modules(OPENMPT REQUIRED libopenmpt)
 
     target_include_directories(audio PRIVATE ${OPENMPT_INCLUDE_DIRS})
+    target_link_directories(audio PUBLIC ${OPENMPT_LIBRARY_DIRS})
     target_link_libraries(audio PUBLIC ${OPENMPT_LIBRARIES})
     target_compile_options(audio PRIVATE ${OPENMPT_CFLAGS_OTHER})
 
