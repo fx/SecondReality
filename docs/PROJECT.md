@@ -39,11 +39,12 @@ True-to-original recreation of Second Reality (Future Crew, 1993) using Sokol + 
     - [x] Implement 320x400 mode support
     - [x] Implement palette management (256 colors)
     - [x] Implement page flipping and horizontal scrolling
-  - [ ] Integrate libopenmpt for S3M audio
-    - [ ] Add libopenmpt dependency
-    - [ ] Create `src/audio/music.h` API
-    - [ ] Load MUSIC0.S3M and MUSIC1.S3M
-    - [ ] Implement playback position tracking for sync
+  - [x] Integrate libopenmpt for S3M audio (PR #4)
+    - [x] Add libopenmpt dependency
+    - [x] Create `src/audio/music.h` API
+    - [x] Load MUSIC0.S3M and MUSIC1.S3M
+    - [x] Implement playback position tracking for sync
+    - [ ] Future: Add mutex for music_set_position/music_stop thread safety
   - [ ] Create part loader framework
     - [ ] Define part interface (init, update, render, cleanup)
     - [ ] Implement part sequencing from SCRIPT
