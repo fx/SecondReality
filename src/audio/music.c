@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 /* Audio configuration */
 #define MUSIC_SAMPLE_RATE 48000
@@ -32,9 +31,6 @@ static struct {
     atomic_int position_seconds_x1000; /* Fixed-point: seconds * 1000 */
 } music_state;
 
-/* Debug callback counter */
-static int callback_count = 0;
-
 /**
  * OpenMPT logging callback for diagnosing load issues
  */
@@ -43,42 +39,11 @@ static void music_openmpt_log(const char *message, void *user) {
     printf("OPENMPT: %s\n", message);
 }
 
-/* Test mode: set to 1 to play a 440Hz test tone instead of module */
-#define MUSIC_TEST_TONE 0
-static double test_tone_phase = 0.0;
-
-/* Debug: write first 5 seconds to WAV file */
-static FILE *debug_wav = NULL;
-static int debug_samples_written = 0;
-#define DEBUG_WAV_SECONDS 5
-#define DEBUG_WAV_SAMPLES (48000 * DEBUG_WAV_SECONDS * 2)
-
 /**
  * Audio callback - called by Sokol Audio from audio thread.
  * Renders audio and updates position atomically.
  */
 static void music_audio_callback(float *buffer, int num_frames, int num_channels) {
-    callback_count++;
-    if (callback_count <= 10) {
-        printf("MUSIC: callback #%d, frames=%d, channels=%d, playing=%d, mod=%p\n",
-               callback_count, num_frames, num_channels,
-               atomic_load(&music_state.playing), (void*)music_state.mod);
-    }
-
-#if MUSIC_TEST_TONE
-    /* Generate 440Hz test tone */
-    double freq = 440.0;
-    double sample_rate = (double)saudio_sample_rate();
-    for (int i = 0; i < num_frames; i++) {
-        float sample = 0.3f * (float)sin(test_tone_phase * 2.0 * 3.14159265359);
-        buffer[i * 2 + 0] = sample; /* Left */
-        buffer[i * 2 + 1] = sample; /* Right */
-        test_tone_phase += freq / sample_rate;
-        if (test_tone_phase > 1.0) test_tone_phase -= 1.0;
-    }
-    return;
-#endif
-
     if (!music_state.mod || !atomic_load(&music_state.playing)) {
         /* Silence when not playing */
         memset(buffer, 0, (size_t)(num_frames * num_channels) * sizeof(float));
@@ -92,50 +57,6 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         (size_t)num_frames,
         buffer
     );
-
-    if (callback_count <= 10) {
-        int order = openmpt_module_get_current_order(music_state.mod);
-        int pattern = openmpt_module_get_current_pattern(music_state.mod);
-        int row = openmpt_module_get_current_row(music_state.mod);
-        int speed = openmpt_module_get_current_speed(music_state.mod);
-        int tempo = openmpt_module_get_current_tempo(music_state.mod);
-
-        /* Check audio sample values */
-        float min_val = 0.0f, max_val = 0.0f;
-        for (int i = 0; i < num_frames * 2; i++) {
-            if (buffer[i] < min_val) min_val = buffer[i];
-            if (buffer[i] > max_val) max_val = buffer[i];
-        }
-
-        printf("MUSIC: rendered %zu frames, order=%d row=%d speed=%d tempo=%d samples=[%.3f,%.3f]\n",
-               frames_rendered, order, row, speed, tempo, min_val, max_val);
-    }
-
-    /* Write to debug WAV file */
-    if (debug_samples_written < DEBUG_WAV_SAMPLES) {
-        if (!debug_wav) {
-            debug_wav = fopen("debug_audio.raw", "wb");
-            if (debug_wav) printf("MUSIC: Writing debug audio to debug_audio.raw\n");
-        }
-        if (debug_wav) {
-            int samples_to_write = num_frames * 2;
-            if (debug_samples_written + samples_to_write > DEBUG_WAV_SAMPLES) {
-                samples_to_write = DEBUG_WAV_SAMPLES - debug_samples_written;
-            }
-            /* Convert float to int16 for raw PCM */
-            for (int i = 0; i < samples_to_write; i++) {
-                int16_t sample = (int16_t)(buffer[i] * 32767.0f);
-                fwrite(&sample, sizeof(int16_t), 1, debug_wav);
-            }
-            debug_samples_written += samples_to_write;
-            if (debug_samples_written >= DEBUG_WAV_SAMPLES) {
-                fclose(debug_wav);
-                debug_wav = NULL;
-                printf("MUSIC: Debug audio written (5 seconds)\n");
-                printf("MUSIC: Play with: aplay -f S16_LE -r 48000 -c 2 debug_audio.raw\n");
-            }
-        }
-    }
 
     /* Fill remainder with silence if we didn't get enough frames */
     if (frames_rendered < (size_t)num_frames) {
@@ -258,6 +179,26 @@ bool music_load(const void *data, size_t size) {
     /* Enable looping (repeat forever) */
     openmpt_module_set_repeat_count(music_state.mod, -1);
 
+    /* Select the best subsong - Second Reality S3M has multiple subsongs due to
+     * pattern jump commands used for demo synchronization. Find the longest one
+     * which is typically the full song played linearly. */
+    int num_subsongs = openmpt_module_get_num_subsongs(music_state.mod);
+    if (num_subsongs > 1) {
+        int best_subsong = 0;
+        double best_duration = 0;
+        for (int i = 0; i < num_subsongs; i++) {
+            openmpt_module_select_subsong(music_state.mod, i);
+            double dur = openmpt_module_get_duration_seconds(music_state.mod);
+            if (dur > best_duration) {
+                best_duration = dur;
+                best_subsong = i;
+            }
+        }
+        openmpt_module_select_subsong(music_state.mod, best_subsong);
+        printf("MUSIC: Selected subsong %d (%.1f sec) out of %d subsongs\n",
+               best_subsong, best_duration, num_subsongs);
+    }
+
     /* Reset position */
     atomic_store(&music_state.current_order, 0);
     atomic_store(&music_state.current_pattern, 0);
@@ -377,12 +318,7 @@ bool music_is_playing(void) {
 
 double music_get_position_seconds(void) {
     int ms = atomic_load(&music_state.position_seconds_x1000);
-    double pos = (double)ms / 1000.0;
-    static int log_count = 0;
-    if (log_count++ < 20) {
-        printf("MUSIC: position=%.3f sec\n", pos);
-    }
-    return pos;
+    return (double)ms / 1000.0;
 }
 
 int music_get_current_order(void) {
