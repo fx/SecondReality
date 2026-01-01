@@ -99,7 +99,7 @@ void video_set_start(uint16_t offset);
 void video_set_hscroll(uint8_t pixels);
 
 /**
- * Convert framebuffer to RGBA, upload to GPU, and draw fullscreen quad.
+ * Convert framebuffer to RGBA, upload to GPU, and draw fullscreen triangle.
  * Call between sg_begin_pass() and sg_end_pass().
  */
 void video_present(void);

@@ -147,7 +147,17 @@ static void rebuild_rgba_lut(void) {
 static void convert_framebuffer_to_rgba(void) {
     int height = (video_state.mode == VIDEO_MODE_X) ? VIDEO_HEIGHT_X : VIDEO_HEIGHT_13H;
     int pixel_count = VIDEO_WIDTH * height;
-    const uint8_t *src = video_state.framebuffer + video_state.start_offset;
+
+    /* Ensure we don't read beyond framebuffer bounds.
+     * start_offset is already validated in video_set_start(), but we
+     * add a safety check here to prevent any potential over-read. */
+    int safe_offset = video_state.start_offset;
+    if (safe_offset + pixel_count > FB_SIZE) {
+        safe_offset = FB_SIZE - pixel_count;
+        if (safe_offset < 0) safe_offset = 0;
+    }
+
+    const uint8_t *src = video_state.framebuffer + safe_offset;
     uint32_t *dst = video_state.rgba_staging;
 
     /* Handle hscroll offset (fine scrolling) */
@@ -301,8 +311,10 @@ void video_set_palette_range(uint8_t start, uint8_t count, const uint8_t *data) 
     if (!data) {
         return;
     }
-    if (start + count > 256) {
-        count = 256 - start;
+    /* Use int for arithmetic to avoid uint8_t overflow */
+    int end = (int)start + (int)count;
+    if (end > 256) {
+        count = (uint8_t)(256 - start);
     }
     memcpy(&video_state.palette[start * 3], data, count * 3);
     video_state.palette_dirty = 1;
@@ -323,12 +335,14 @@ void video_get_palette(uint8_t palette[768]) {
 }
 
 void video_set_start(uint16_t offset) {
-    /* Clamp to valid framebuffer range to prevent buffer over-read */
+    /* Clamp to valid framebuffer range to prevent buffer over-read.
+     * Mode X uses the full buffer (no page flipping possible).
+     * Mode 13h can offset up to 64000 bytes (one screen size). */
     int max_offset = (video_state.mode == VIDEO_MODE_X)
-                     ? (FB_SIZE - (VIDEO_WIDTH * VIDEO_HEIGHT_X))
+                     ? 0
                      : (FB_SIZE - (VIDEO_WIDTH * VIDEO_HEIGHT_13H));
     if (offset > max_offset) {
-        offset = max_offset;
+        offset = (uint16_t)max_offset;
     }
     video_state.start_offset = offset;
 }
@@ -361,12 +375,15 @@ void video_present(void) {
         }
     });
 
-    /* Calculate letterbox viewport for 4:3 aspect ratio */
+    /* Calculate letterbox viewport for 4:3 display aspect ratio.
+     * VGA Mode 13h (320x200) and Mode X (320x400) were displayed on 4:3 CRT
+     * monitors with non-square pixels. We use a fixed 4:3 ratio to match
+     * the authentic VGA display appearance. */
     int win_width = sapp_width();
     int win_height = sapp_height();
 
-    /* Target aspect ratio based on mode */
-    float target_aspect = (float)VIDEO_WIDTH / (float)height;
+    /* Fixed 4:3 aspect ratio for authentic VGA display */
+    float target_aspect = 4.0f / 3.0f;
     float win_aspect = (float)win_width / (float)win_height;
 
     int vp_x, vp_y, vp_w, vp_h;
