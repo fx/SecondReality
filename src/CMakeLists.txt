@@ -14,6 +14,5 @@ if(EMSCRIPTEN)
         "SHELL:-s ALLOW_MEMORY_GROWTH=1"
         "SHELL:-s INITIAL_MEMORY=16777216"
         "SHELL:-s STACK_SIZE=1048576"
-        "SHELL:-s ASYNCIFY=1"
     )
 endif()
