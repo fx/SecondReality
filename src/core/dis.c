@@ -9,6 +9,7 @@
 #include "audio/music.h"
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 /* Sync point timing (frames at 60fps) */
 #define SYNC_FRAMES_PER_POINT 600  /* ~10 seconds per sync point */
@@ -27,7 +28,17 @@ static struct {
     int music_plus;
     uint8_t msg_areas[DIS_MSG_AREA_COUNT][DIS_MSG_AREA_SIZE];
     dis_copper_fn copper[DIS_COPPER_COUNT];
+    struct timespec start_time; /* Wall clock time when part started */
 } dis_state;
+
+/* Get elapsed milliseconds since part start */
+static int get_elapsed_ms(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long sec_diff = now.tv_sec - dis_state.start_time.tv_sec;
+    long nsec_diff = now.tv_nsec - dis_state.start_time.tv_nsec;
+    return (int)(sec_diff * 1000 + nsec_diff / 1000000);
+}
 
 int dis_version(void) {
     /* Clear transient state */
@@ -37,6 +48,9 @@ int dis_version(void) {
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;
+
+    /* Record start time for wall-clock sync */
+    clock_gettime(CLOCK_MONOTONIC, &dis_state.start_time);
 
     /* Mark as initialized */
     dis_state.initialized = 1;
@@ -65,6 +79,12 @@ int dis_waitb(void) {
     }
     /* NOTE: Not thread-safe. Must be called from the same thread as dis_frame_tick() */
     dis_state.frame_counter = 0;
+
+    /* Sleep for approximately 1/60th second to simulate 60fps timing.
+     * This ensures blocking fade/wait loops in demo parts run at
+     * the correct speed regardless of actual display frame rate. */
+    struct timespec sleep_time = { .tv_sec = 0, .tv_nsec = 16666667 }; /* ~60fps */
+    nanosleep(&sleep_time, NULL);
 
     return frames;
 }
@@ -139,35 +159,28 @@ int dis_sync(void) {
      *   0x072f (order 7, row 47) -> sync 7  Additional credits
      *   0x082f (order 8, row 47) -> sync 8  Exit
      *
-     * Problem: The S3M orders 0-3 contain pattern jump commands (Bxx) that
-     * immediately jump to order 28. The original DIS handled this specially,
-     * but we can't replicate that with libopenmpt.
+     * Solution: Use WALL CLOCK TIME for sync (not frame count).
+     * This ensures correct timing regardless of actual frame rate.
      *
-     * Solution: Use ELAPSED FRAME TIME (not music position) for sync.
-     * Based on user testing, the original timing is:
-     *   - ~15 seconds of intro music before first text
-     *   - ~5 seconds per text screen (300 frame wait)
-     *   - Total intro: ~30 seconds before credits
-     *
-     * At 60fps:
-     *   sync 0: frames < 900 (0-15s intro music)
-     *   sync 1: frames >= 900 (15s - Future Crew, ~5s display)
-     *   sync 2: frames >= 1200 (20s - Assembly 93, ~5s display)
-     *   sync 3: frames >= 1500 (25s - Second Reality, ~5s display)
-     *   sync 4+: frames >= 1800 (30s+ - credits, ~5s each)
+     * Timing calibrated from reference video (docs/reference.mp4):
+     *   - 16s: "A Future Crew Production" fades in
+     *   - 24s: "First Presented at Assembly 93" fades in
+     *   - 31s: "in Second Reality" / Dolby logo fades in
+     *   - 38s: Horizon scene begins
      */
-    int frames = dis_state.total_frames;
+    int ms = get_elapsed_ms();
 
-    /* Time-based sync using elapsed frames at 60fps */
-    if (frames < 900) return 0;      /* 0-15s: intro music, black screen */
-    if (frames < 1200) return 1;     /* 15-20s: "A Future Crew Production" */
-    if (frames < 1500) return 2;     /* 20-25s: "First Presented at Assembly 93" */
-    if (frames < 1800) return 3;     /* 25-30s: "in Second Reality" */
-    if (frames < 2100) return 4;     /* 30-35s: horizon + graphics credits */
-    if (frames < 2400) return 5;     /* 35-40s: music credits */
-    if (frames < 2700) return 6;     /* 40-45s: code credits */
-    if (frames < 3000) return 7;     /* 45-50s: additional credits */
-    return 8;                        /* 50s+: exit */
+    /* Wall-clock time based sync (milliseconds)
+     * Adjusted -1.5s to account for window/recording startup latency */
+    if (ms < 14500) return 0;      /* 0-14.5s: intro music, black screen */
+    if (ms < 22500) return 1;      /* 14.5-22.5s: "A Future Crew Production" */
+    if (ms < 29500) return 2;      /* 22.5-29.5s: "First Presented at Assembly 93" */
+    if (ms < 36500) return 3;      /* 29.5-36.5s: "in Second Reality" */
+    if (ms < 41500) return 4;      /* 36.5-41.5s: horizon + graphics credits */
+    if (ms < 46500) return 5;      /* 41.5-46.5s: music credits */
+    if (ms < 51500) return 6;      /* 46.5-51.5s: code credits */
+    if (ms < 56500) return 7;      /* 51.5-56.5s: additional credits */
+    return 8;                      /* 56.5s+: exit */
 }
 
 /* Internal Sokol integration functions */
@@ -202,6 +215,9 @@ void dis_reset(void) {
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;
+
+    /* Reset start time for wall-clock sync */
+    clock_gettime(CLOCK_MONOTONIC, &dis_state.start_time);
 
     /* Clear copper callbacks */
     for (int i = 0; i < DIS_COPPER_COUNT; i++) {

@@ -402,6 +402,7 @@ static void alku_init(sr_part_t *part)
     /* Start at phase 0 */
     s->phase = PHASE_WAIT_SYNC1;
     printf("ALKU: initialized, phase=%d\n", s->phase);
+    fflush(stdout);
 }
 
 static int alku_update(sr_part_t *part, int frame_count)
@@ -411,8 +412,9 @@ static int alku_update(sr_part_t *part, int frame_count)
 
     static int update_count = 0;
     update_count++;
-    if (update_count <= 60) {
+    if (update_count <= 60 || (update_count % 100 == 0)) {
         printf("ALKU: update #%d, phase=%d, sync=%d\n", update_count, s->phase, dis_sync());
+        fflush(stdout);
     }
 
     /* Check for exit */
@@ -436,11 +438,12 @@ static int alku_update(sr_part_t *part, int frame_count)
         break;
 
     case PHASE_INTRO1:
-        /* Fade in text, wait, fade out */
+        /* Fade in text, wait, fade out
+         * Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
         if (s->frame_count == 0) {
             dofade(s, s->fade1, s->fade2);
         }
-        if (wait_frames(s, 300)) break;
+        if (wait_frames(s, 200)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
         printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC2);
@@ -458,10 +461,11 @@ static int alku_update(sr_part_t *part, int frame_count)
         break;
 
     case PHASE_INTRO2:
+        /* Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
         if (s->frame_count == 0) {
             dofade(s, s->fade1, s->fade2);
         }
-        if (wait_frames(s, 300)) break;
+        if (wait_frames(s, 200)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
         printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC3);
@@ -481,10 +485,11 @@ static int alku_update(sr_part_t *part, int frame_count)
         break;
 
     case PHASE_INTRO3:
+        /* Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
         if (s->frame_count == 0) {
             dofade(s, s->fade1, s->fade2);
         }
-        if (wait_frames(s, 300)) break;
+        if (wait_frames(s, 200)) break;
         dofade(s, s->fade2, s->fade1);
         fonapois(s);
         printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC4);
