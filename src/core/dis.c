@@ -126,38 +126,69 @@ int dis_getmframe(void) {
 
 int dis_sync(void) {
     /*
-     * Sync points for ALKU (from original MAIN.C comments):
-     * 0 = initial (black)
-     * 1 = fc_pres ("A Future Crew Production")
-     * 2 = first ("First Presented at Assembly 93")
-     * 3 = maisema ("in Second Reality" / horizon)
-     * 4 = gfx (graphics credits)
-     * 5 = music (music credits)
-     * 6 = code (code credits)
-     * 7 = addi (additional credits)
-     * 8 = exit
+     * Sync points for ALKU (from original DIS/DISINT.ASM ordersync1 table):
      *
-     * If music is playing, map position to sync points.
-     * Otherwise, use frame-based timing (~5 seconds per point).
+     * Original mapping (order*256 + row -> sync):
+     *   0x0000 (order 0) -> sync 0
+     *   0x0200 (order 2) -> sync 1  "A Future Crew Production"
+     *   0x0300 (order 3) -> sync 2  "First Presented at Assembly 93"
+     *   0x032f (order 3, row 47) -> sync 3  "in Second Reality"
+     *   0x042f (order 4, row 47) -> sync 4  Graphics credits
+     *   0x052f (order 5, row 47) -> sync 5  Music credits
+     *   0x062f (order 6, row 47) -> sync 6  Code credits
+     *   0x072f (order 7, row 47) -> sync 7  Additional credits
+     *   0x082f (order 8, row 47) -> sync 8  Exit
+     *
+     * Problem: The S3M orders 0-3 contain pattern jump commands that
+     * immediately jump to order 28 (not sequential playback). This was
+     * handled by DIS in the original demo but breaks standalone playback.
+     *
+     * Solution: Use time-based sync for intro phases. Each text screen
+     * takes ~5 seconds (1 fade frame + 300 wait frames + 1 fade frame
+     * = ~302 frames at 60fps). The intro music (subsong 4) is 21.9 seconds.
+     *
+     * Timing: sync triggers start of each phase, then code displays text
+     * for ~5 seconds before checking next sync. Sync points spaced to allow
+     * text display to complete:
+     *   sync 0: t < 0.3s (initial black - brief pause)
+     *   sync 1: t >= 0.3s (triggers "Future Crew" display, takes ~5s)
+     *   sync 2: t >= 5.5s (triggers "Assembly 93" display, takes ~5s)
+     *   sync 3: t >= 10.5s (triggers "Second Reality" display, takes ~5s)
+     *   sync 4+: t >= 15.5s (horizon + credits)
      */
     if (music_is_playing()) {
-        /* Map music position to sync points 0-8.
-         * Subsong 4 (intro music) is ~22 seconds, so timing is compressed. */
         double pos = music_get_position_seconds();
-        if (pos < 2.0) return 0;    /* 0-2s: black/waiting */
-        if (pos < 5.0) return 1;    /* 2-5s: "A Future Crew Production" */
-        if (pos < 8.0) return 2;    /* 5-8s: "First Presented at Assembly 93" */
-        if (pos < 11.0) return 3;   /* 8-11s: "in Second Reality" */
-        if (pos < 14.0) return 4;   /* 11-14s: horizon + graphics credits */
-        if (pos < 17.0) return 5;   /* 14-17s: music credits */
-        if (pos < 20.0) return 6;   /* 17-20s: code credits */
-        if (pos < 23.0) return 7;   /* 20-23s: additional credits */
-        return 8;                   /* 23s+: exit */
+        int order = music_get_current_order();
+
+        /*
+         * Use time-based sync for intro phases (sync 0-3).
+         * Each text screen needs ~5 seconds (300 frame wait + instant fades).
+         * Total intro: ~15 seconds for 3 text screens.
+         *
+         * After intro completes (t >= 15.5s), use order-based sync for credits.
+         * Subsong 4 plays orders 4-13 with ~2.2s per order.
+         */
+
+        /* Intro phases: pure time-based (orders 0-3 don't play in S3M) */
+        if (pos < 0.3) return 0;     /* Initial black - brief pause */
+        if (pos < 5.5) return 1;     /* "A Future Crew Production" ~5s */
+        if (pos < 10.5) return 2;    /* "First Presented at Assembly 93" ~5s */
+        if (pos < 15.5) return 3;    /* "in Second Reality" ~5s */
+
+        /* Credits phase: order-based sync, offset from subsong 4 start order */
+        /* Subsong 4 starts at order 4, so offset = order - 4 + 4 = order */
+        /* But we want sync 4 at order 4, sync 5 at order 5, etc. */
+        /* Since subsong 4 is ~22s and loops, order progression is reliable */
+        if (order >= 8) return 8;    /* Exit after credits */
+        if (order >= 7) return 7;    /* Additional credits */
+        if (order >= 6) return 6;    /* Code credits */
+        if (order >= 5) return 5;    /* Music credits */
+        return 4;                    /* Horizon + Graphics credits */
     }
 
     /* Fallback: frame-based timing (60fps) */
     int frames = dis_state.total_frames;
-    if (frames < SYNC_FRAMES_FIRST) return 0;   /* 0-18s (1080 frames) */
+    if (frames < SYNC_FRAMES_FIRST) return 0;
     int sync_point = 1 + (frames - SYNC_FRAMES_FIRST) / SYNC_FRAMES_PER_POINT;
     if (sync_point > SYNC_POINT_MAX) {
         sync_point = SYNC_POINT_MAX;
