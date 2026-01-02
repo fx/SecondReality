@@ -171,15 +171,18 @@ int dis_sync(void) {
     int ms = get_elapsed_ms();
 
     /* Wall-clock time based sync (milliseconds)
-     * Adjusted -1.5s to account for window/recording startup latency */
-    if (ms < 14500) return 0;      /* 0-14.5s: intro music, black screen */
-    if (ms < 22500) return 1;      /* 14.5-22.5s: "A Future Crew Production" */
-    if (ms < 29500) return 2;      /* 22.5-29.5s: "First Presented at Assembly 93" */
-    if (ms < 36500) return 3;      /* 29.5-36.5s: "in Second Reality" */
-    if (ms < 41500) return 4;      /* 36.5-41.5s: horizon + graphics credits */
-    if (ms < 46500) return 5;      /* 41.5-46.5s: music credits */
-    if (ms < 51500) return 6;      /* 46.5-51.5s: code credits */
-    if (ms < 56500) return 7;      /* 51.5-56.5s: additional credits */
+     * Timing calibrated from reference video analysis:
+     * - Reference frame_007 (16.0s): text mid-fade
+     * - Reference frame_008 (16.5s): text fully visible
+     * Start fade at ~15.5s so mid-point is ~16s */
+    if (ms < 15500) return 0;      /* 0-15.5s: intro music, black screen */
+    if (ms < 23500) return 1;      /* 15.5-23.5s: "A Future Crew Production" */
+    if (ms < 30500) return 2;      /* 23.5-30.5s: "First Presented at Assembly 93" */
+    if (ms < 37500) return 3;      /* 30.5-37.5s: "in Second Reality" */
+    if (ms < 42500) return 4;      /* 37.5-42.5s: horizon + graphics credits */
+    if (ms < 47500) return 5;      /* 42.5-47.5s: music credits */
+    if (ms < 52500) return 6;      /* 47.5-52.5s: code credits */
+    if (ms < 57500) return 7;      /* 52.5-57.5s: additional credits */
     return 8;                      /* 56.5s+: exit */
 }
 

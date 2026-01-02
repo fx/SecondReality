@@ -100,26 +100,45 @@ static void prtc(alku_state_t *s, int center_x, int y, const char *txt)
 }
 
 /**
- * Perform a blocking palette fade between two palettes.
- * Interpolates in 64 steps, updating video palette each frame.
+ * Start a non-blocking fade between two palettes.
+ * Call tick_lerp_fade() each frame to advance.
  *
  * @param s Part state
  * @param pal1 Source palette (768 bytes)
  * @param pal2 Target palette (768 bytes)
  */
-static void dofade(alku_state_t *s, const uint8_t *pal1, const uint8_t *pal2)
+static void start_lerp_fade(alku_state_t *s, const uint8_t *pal1, const uint8_t *pal2)
+{
+    s->fade_src = pal1;
+    s->fade_dst = pal2;
+    s->fade_step = 0;
+}
+
+/**
+ * Tick the non-blocking lerp fade by one step.
+ * Interpolates palette and updates video.
+ *
+ * @param s Part state
+ * @return 1 if fade still active, 0 if complete
+ */
+static int tick_lerp_fade(alku_state_t *s)
 {
     uint8_t pal[ALKU_PALETTE_SIZE];
-    int step, i;
+    int i;
+    int step = s->fade_step;
 
-    for (step = 0; step < 64 && !dis_exit(); step++) {
-        for (i = 0; i < ALKU_PALETTE_SIZE; i++) {
-            /* Linear interpolation: pal1*(64-step) + pal2*step >> 6 */
-            pal[i] = (pal1[i] * (64 - step) + pal2[i] * step) >> 6;
-        }
-        video_set_palette(pal);
-        dis_waitb(); /* Wait for frame */
+    if (step >= 64) {
+        return 0; /* Fade complete */
     }
+
+    /* Linear interpolation: src*(64-step) + dst*step >> 6 */
+    for (i = 0; i < ALKU_PALETTE_SIZE; i++) {
+        pal[i] = (s->fade_src[i] * (64 - step) + s->fade_dst[i] * step) >> 6;
+    }
+    video_set_palette(pal);
+
+    s->fade_step++;
+    return s->fade_step < 64;
 }
 
 /**
@@ -433,21 +452,40 @@ static int alku_update(sr_part_t *part, int frame_count)
             prtc(s, 160, 200, "Production");
             printf("ALKU: transitioning to phase %d\n", PHASE_INTRO1);
             s->phase = PHASE_INTRO1;
+            s->sub_phase = 0;
             s->frame_count = 0;
         }
         break;
 
     case PHASE_INTRO1:
-        /* Fade in text, wait, fade out
-         * Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
-        if (s->frame_count == 0) {
-            dofade(s, s->fade1, s->fade2);
+        /* Fade in text, wait, fade out - non-blocking
+         * sub_phase: 0=fade-in, 1=display, 2=fade-out */
+        switch (s->sub_phase) {
+        case 0: /* Fade in */
+            if (s->frame_count == 0) {
+                start_lerp_fade(s, s->fade1, s->fade2);
+            }
+            s->frame_count++;
+            if (!tick_lerp_fade(s)) {
+                s->sub_phase = 1;
+                s->frame_count = 0;
+            }
+            break;
+        case 1: /* Display */
+            if (wait_frames(s, 200)) break;
+            s->sub_phase = 2;
+            start_lerp_fade(s, s->fade2, s->fade1);
+            break;
+        case 2: /* Fade out */
+            if (!tick_lerp_fade(s)) {
+                fonapois(s);
+                printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC2);
+                s->phase = PHASE_WAIT_SYNC2;
+                s->sub_phase = 0;
+                s->frame_count = 0;
+            }
+            break;
         }
-        if (wait_frames(s, 200)) break;
-        dofade(s, s->fade2, s->fade1);
-        fonapois(s);
-        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC2);
-        s->phase = PHASE_WAIT_SYNC2;
         break;
 
     case PHASE_WAIT_SYNC2:
@@ -456,20 +494,40 @@ static int alku_update(sr_part_t *part, int frame_count)
             prtc(s, 160, 200, "at Assembly 93");
             printf("ALKU: transitioning to phase %d\n", PHASE_INTRO2);
             s->phase = PHASE_INTRO2;
+            s->sub_phase = 0;
             s->frame_count = 0;
         }
         break;
 
     case PHASE_INTRO2:
-        /* Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
-        if (s->frame_count == 0) {
-            dofade(s, s->fade1, s->fade2);
+        /* Fade in text, wait, fade out - non-blocking
+         * sub_phase: 0=fade-in, 1=display, 2=fade-out */
+        switch (s->sub_phase) {
+        case 0: /* Fade in */
+            if (s->frame_count == 0) {
+                start_lerp_fade(s, s->fade1, s->fade2);
+            }
+            s->frame_count++;
+            if (!tick_lerp_fade(s)) {
+                s->sub_phase = 1;
+                s->frame_count = 0;
+            }
+            break;
+        case 1: /* Display */
+            if (wait_frames(s, 200)) break;
+            s->sub_phase = 2;
+            start_lerp_fade(s, s->fade2, s->fade1);
+            break;
+        case 2: /* Fade out */
+            if (!tick_lerp_fade(s)) {
+                fonapois(s);
+                printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC3);
+                s->phase = PHASE_WAIT_SYNC3;
+                s->sub_phase = 0;
+                s->frame_count = 0;
+            }
+            break;
         }
-        if (wait_frames(s, 200)) break;
-        dofade(s, s->fade2, s->fade1);
-        fonapois(s);
-        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC3);
-        s->phase = PHASE_WAIT_SYNC3;
         break;
 
     case PHASE_WAIT_SYNC3:
@@ -480,20 +538,40 @@ static int alku_update(sr_part_t *part, int frame_count)
             prtc(s, 160, 200, "Reality");
             printf("ALKU: transitioning to phase %d\n", PHASE_INTRO3);
             s->phase = PHASE_INTRO3;
+            s->sub_phase = 0;
             s->frame_count = 0;
         }
         break;
 
     case PHASE_INTRO3:
-        /* Total display time ~5.5s (64 fade + 200 wait + 64 fade = 328 frames) */
-        if (s->frame_count == 0) {
-            dofade(s, s->fade1, s->fade2);
+        /* Fade in text, wait, fade out - non-blocking
+         * sub_phase: 0=fade-in, 1=display, 2=fade-out */
+        switch (s->sub_phase) {
+        case 0: /* Fade in */
+            if (s->frame_count == 0) {
+                start_lerp_fade(s, s->fade1, s->fade2);
+            }
+            s->frame_count++;
+            if (!tick_lerp_fade(s)) {
+                s->sub_phase = 1;
+                s->frame_count = 0;
+            }
+            break;
+        case 1: /* Display */
+            if (wait_frames(s, 200)) break;
+            s->sub_phase = 2;
+            start_lerp_fade(s, s->fade2, s->fade1);
+            break;
+        case 2: /* Fade out */
+            if (!tick_lerp_fade(s)) {
+                fonapois(s);
+                printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC4);
+                s->phase = PHASE_WAIT_SYNC4;
+                s->sub_phase = 0;
+                s->frame_count = 0;
+            }
+            break;
         }
-        if (wait_frames(s, 200)) break;
-        dofade(s, s->fade2, s->fade1);
-        fonapois(s);
-        printf("ALKU: transitioning to phase %d\n", PHASE_WAIT_SYNC4);
-        s->phase = PHASE_WAIT_SYNC4;
         break;
 
     case PHASE_WAIT_SYNC4:

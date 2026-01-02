@@ -82,6 +82,10 @@ typedef struct {
     /* Sequence state */
     int credits_index;      /* Current credits group (0-4) */
     int phase;              /* Current animation phase */
+    int sub_phase;          /* Sub-phase: 0=fade-in, 1=display, 2=fade-out */
+    int fade_step;          /* Current step in fade (0-63) */
+    const uint8_t *fade_src;  /* Source palette for current fade */
+    const uint8_t *fade_dst;  /* Destination palette for current fade */
 } alku_state_t;
 
 /**
