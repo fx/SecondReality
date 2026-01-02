@@ -139,61 +139,35 @@ int dis_sync(void) {
      *   0x072f (order 7, row 47) -> sync 7  Additional credits
      *   0x082f (order 8, row 47) -> sync 8  Exit
      *
-     * Problem: The S3M orders 0-3 contain pattern jump commands that
-     * immediately jump to order 28 (not sequential playback). This was
-     * handled by DIS in the original demo but breaks standalone playback.
+     * Problem: The S3M orders 0-3 contain pattern jump commands (Bxx) that
+     * immediately jump to order 28. The original DIS handled this specially,
+     * but we can't replicate that with libopenmpt.
      *
-     * Solution: Use time-based sync for intro phases. Each text screen
-     * takes ~5 seconds (1 fade frame + 300 wait frames + 1 fade frame
-     * = ~302 frames at 60fps). The intro music (subsong 4) is 21.9 seconds.
+     * Solution: Use ELAPSED FRAME TIME (not music position) for sync.
+     * Based on user testing, the original timing is:
+     *   - ~15 seconds of intro music before first text
+     *   - ~5 seconds per text screen (300 frame wait)
+     *   - Total intro: ~30 seconds before credits
      *
-     * Timing: sync triggers start of each phase, then code displays text
-     * for ~5 seconds before checking next sync. Sync points spaced to allow
-     * text display to complete:
-     *   sync 0: t < 0.3s (initial black - brief pause)
-     *   sync 1: t >= 0.3s (triggers "Future Crew" display, takes ~5s)
-     *   sync 2: t >= 5.5s (triggers "Assembly 93" display, takes ~5s)
-     *   sync 3: t >= 10.5s (triggers "Second Reality" display, takes ~5s)
-     *   sync 4+: t >= 15.5s (horizon + credits)
+     * At 60fps:
+     *   sync 0: frames < 900 (0-15s intro music)
+     *   sync 1: frames >= 900 (15s - Future Crew, ~5s display)
+     *   sync 2: frames >= 1200 (20s - Assembly 93, ~5s display)
+     *   sync 3: frames >= 1500 (25s - Second Reality, ~5s display)
+     *   sync 4+: frames >= 1800 (30s+ - credits, ~5s each)
      */
-    if (music_is_playing()) {
-        double pos = music_get_position_seconds();
-        int order = music_get_current_order();
-
-        /*
-         * Use time-based sync for intro phases (sync 0-3).
-         * Each text screen needs ~5 seconds (300 frame wait + instant fades).
-         * Total intro: ~15 seconds for 3 text screens.
-         *
-         * After intro completes (t >= 15.5s), use order-based sync for credits.
-         * Subsong 4 plays orders 4-13 with ~2.2s per order.
-         */
-
-        /* Intro phases: pure time-based (orders 0-3 don't play in S3M) */
-        if (pos < 0.3) return 0;     /* Initial black - brief pause */
-        if (pos < 5.5) return 1;     /* "A Future Crew Production" ~5s */
-        if (pos < 10.5) return 2;    /* "First Presented at Assembly 93" ~5s */
-        if (pos < 15.5) return 3;    /* "in Second Reality" ~5s */
-
-        /* Credits phase: order-based sync, offset from subsong 4 start order */
-        /* Subsong 4 starts at order 4, so offset = order - 4 + 4 = order */
-        /* But we want sync 4 at order 4, sync 5 at order 5, etc. */
-        /* Since subsong 4 is ~22s and loops, order progression is reliable */
-        if (order >= 8) return 8;    /* Exit after credits */
-        if (order >= 7) return 7;    /* Additional credits */
-        if (order >= 6) return 6;    /* Code credits */
-        if (order >= 5) return 5;    /* Music credits */
-        return 4;                    /* Horizon + Graphics credits */
-    }
-
-    /* Fallback: frame-based timing (60fps) */
     int frames = dis_state.total_frames;
-    if (frames < SYNC_FRAMES_FIRST) return 0;
-    int sync_point = 1 + (frames - SYNC_FRAMES_FIRST) / SYNC_FRAMES_PER_POINT;
-    if (sync_point > SYNC_POINT_MAX) {
-        sync_point = SYNC_POINT_MAX;
-    }
-    return sync_point;
+
+    /* Time-based sync using elapsed frames at 60fps */
+    if (frames < 900) return 0;      /* 0-15s: intro music, black screen */
+    if (frames < 1200) return 1;     /* 15-20s: "A Future Crew Production" */
+    if (frames < 1500) return 2;     /* 20-25s: "First Presented at Assembly 93" */
+    if (frames < 1800) return 3;     /* 25-30s: "in Second Reality" */
+    if (frames < 2100) return 4;     /* 30-35s: horizon + graphics credits */
+    if (frames < 2400) return 5;     /* 35-40s: music credits */
+    if (frames < 2700) return 6;     /* 40-45s: code credits */
+    if (frames < 3000) return 7;     /* 45-50s: additional credits */
+    return 8;                        /* 50s+: exit */
 }
 
 /* Internal Sokol integration functions */
