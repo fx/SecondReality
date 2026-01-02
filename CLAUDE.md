@@ -144,11 +144,37 @@ DISPLAY=:1 LIBGL_ALWAYS_SOFTWARE=1 ./build/src/SecondReality
 **Extract frames for analysis:**
 ```bash
 mkdir -p /tmp/frames
-ffmpeg -i /tmp/demo.mp4 -vf "fps=5" /tmp/frames/f_%02d.png
+ffmpeg -i /tmp/demo.mp4 -vf "fps=2" /tmp/frames/f_%03d.png
 
 # Non-black frames typically >7KB (black/empty frames ~1.6KB)
+# Frame N at 2fps = (N-1)/2 seconds into video
 find /tmp/frames -name "*.png" -size +7k
 ```
+
+### Comparing with Reference Video
+
+Reference video is at `docs/reference.mp4`. Always compare both audio and video timing.
+
+**Extract reference frames:**
+```bash
+mkdir -p /tmp/ref_frames
+ffmpeg -i docs/reference.mp4 -t 60 -vf "fps=2" /tmp/ref_frames/ref_%03d.png
+```
+
+**Compare timing (find first non-black frame):**
+```bash
+# Frame N at 2fps = (N-1)/2 seconds
+for i in $(seq -w 1 40); do
+    size=$(stat -c%s "/tmp/ref_frames/ref_0$i.png" 2>/dev/null)
+    echo "Frame $i: $size bytes"
+done | grep -v ": 383 bytes"  # Filter out black frames
+```
+
+**Key timing points from reference (docs/reference.mp4):**
+- 16.0s: "A Future Crew Production" fades in
+- 24.0s: "First Presented at Assembly 93"
+- 31.0s: "in Second Reality" / Dolby logo
+- 38.0s: Horizon scene begins
 
 ### WASM/Browser Build
 
