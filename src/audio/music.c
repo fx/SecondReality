@@ -179,24 +179,42 @@ bool music_load(const void *data, size_t size) {
     /* Enable looping (repeat forever) */
     openmpt_module_set_repeat_count(music_state.mod, -1);
 
-    /* Select the best subsong - Second Reality S3M has multiple subsongs due to
-     * pattern jump commands used for demo synchronization. Find the longest one
-     * which is typically the full song played linearly. */
+    /* Select appropriate subsong - Second Reality S3M has multiple subsongs due to
+     * pattern jump commands used for demo synchronization.
+     *
+     * For the intro (ALKU section), we need a subsong starting at a low order
+     * (like subsong 4 which covers orders 4-15 with intro music). The "longest"
+     * subsong starts at order 50 which is mid-song.
+     *
+     * Strategy: Find a subsong that's long enough (>15 sec) and starts at a
+     * low order number to get the intro music. */
     int num_subsongs = openmpt_module_get_num_subsongs(music_state.mod);
     if (num_subsongs > 1) {
         int best_subsong = 0;
         double best_duration = 0;
+        int best_start_order = 9999;
+
         for (int i = 0; i < num_subsongs; i++) {
             openmpt_module_select_subsong(music_state.mod, i);
             double dur = openmpt_module_get_duration_seconds(music_state.mod);
-            if (dur > best_duration) {
-                best_duration = dur;
+
+            /* Render briefly to find starting order */
+            float tmp[64];
+            openmpt_module_read_interleaved_float_stereo(music_state.mod, 48000, 16, tmp);
+            int start_order = openmpt_module_get_current_order(music_state.mod);
+
+            /* Prefer: duration > 15s AND starts at lowest order */
+            if (dur > 15.0 && start_order < best_start_order) {
                 best_subsong = i;
+                best_duration = dur;
+                best_start_order = start_order;
             }
         }
+
+        /* Reset and select the best subsong */
         openmpt_module_select_subsong(music_state.mod, best_subsong);
-        printf("MUSIC: Selected subsong %d (%.1f sec) out of %d subsongs\n",
-               best_subsong, best_duration, num_subsongs);
+        printf("MUSIC: Selected subsong %d (%.1f sec, starts order %d) out of %d\n",
+               best_subsong, best_duration, best_start_order, num_subsongs);
     }
 
     /* Reset position */

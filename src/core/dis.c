@@ -141,17 +141,18 @@ int dis_sync(void) {
      * Otherwise, use frame-based timing (~5 seconds per point).
      */
     if (music_is_playing()) {
-        /* Map music position to sync points 0-8 */
+        /* Map music position to sync points 0-8.
+         * Subsong 4 (intro music) is ~22 seconds, so timing is compressed. */
         double pos = music_get_position_seconds();
-        if (pos < 18.0) return 0;   /* 0-18s: black/waiting */
-        if (pos < 28.0) return 1;   /* 18-28s: "A Future Crew Production" */
-        if (pos < 38.0) return 2;   /* 28-38s: "First Presented at Assembly 93" */
-        if (pos < 48.0) return 3;   /* 38-48s: "in Second Reality" */
-        if (pos < 58.0) return 4;   /* 48-58s: horizon + graphics credits */
-        if (pos < 68.0) return 5;   /* 58-68s: music credits */
-        if (pos < 78.0) return 6;   /* 68-78s: code credits */
-        if (pos < 88.0) return 7;   /* 78-88s: additional credits */
-        return 8;                   /* 88s+: exit */
+        if (pos < 2.0) return 0;    /* 0-2s: black/waiting */
+        if (pos < 5.0) return 1;    /* 2-5s: "A Future Crew Production" */
+        if (pos < 8.0) return 2;    /* 5-8s: "First Presented at Assembly 93" */
+        if (pos < 11.0) return 3;   /* 8-11s: "in Second Reality" */
+        if (pos < 14.0) return 4;   /* 11-14s: horizon + graphics credits */
+        if (pos < 17.0) return 5;   /* 14-17s: music credits */
+        if (pos < 20.0) return 6;   /* 17-20s: code credits */
+        if (pos < 23.0) return 7;   /* 20-23s: additional credits */
+        return 8;                   /* 23s+: exit */
     }
 
     /* Fallback: frame-based timing (60fps) */
