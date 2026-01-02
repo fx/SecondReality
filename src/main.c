@@ -7,8 +7,15 @@
 #include "audio/music.h"
 #include "parts/alku/alku.h"
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 static sg_pass_action pass_action;
+
+/* CLI options */
+static int g_start_part = 0;        /* Part index to start from */
+static int g_single_part = 0;       /* Exit after first part completes */
+static int g_initial_part_done = 0; /* Track if initial part finished */
 
 /* Test Part 1: Red/Blue gradient bars */
 
@@ -180,8 +187,8 @@ static void init(void) {
     part_loader_register(&test_part_1);
     part_loader_register(&test_part_2);
 
-    /* Start from first part */
-    part_loader_start(0);
+    /* Start from specified part (default: 0) */
+    part_loader_start(g_start_part);
 
     /* Black clear color for letterboxing */
     pass_action = (sg_pass_action){
@@ -208,9 +215,19 @@ static void frame(void) {
         return;
     }
 
+    /* Track current part for single-part mode */
+    int current_part = part_loader_get_index();
+
     /* Update and render current part */
     part_loader_tick();
     part_loader_render();
+
+    /* In single-part mode, exit when we transition to a different part */
+    if (g_single_part && part_loader_get_index() != current_part) {
+        printf("[main] Single-part mode: part completed, exiting\n");
+        sapp_request_quit();
+        return;
+    }
 
     sg_begin_pass(&(sg_pass){ .action = pass_action, .swapchain = sglue_swapchain() });
     video_present();
@@ -236,9 +253,36 @@ static void event(const sapp_event* e) {
     }
 }
 
+static void print_usage(const char *prog) {
+    printf("Usage: %s [options]\n", prog);
+    printf("Options:\n");
+    printf("  -p, --part <N>    Start from part N (0=ALKU, 1=TEST1, 2=TEST2)\n");
+    printf("  -s, --single      Exit after first part completes\n");
+    printf("  -l, --list        List available parts and exit\n");
+    printf("  -h, --help        Show this help\n");
+}
+
 sapp_desc sokol_main(int argc, char* argv[]) {
-    (void)argc;
-    (void)argv;
+    /* Parse CLI arguments */
+    for (int i = 1; i < argc; i++) {
+        if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--part") == 0) && i + 1 < argc) {
+            g_start_part = atoi(argv[++i]);
+            printf("[main] Starting from part %d\n", g_start_part);
+        } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--single") == 0) {
+            g_single_part = 1;
+            printf("[main] Single-part mode enabled\n");
+        } else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--list") == 0) {
+            printf("Available parts:\n");
+            printf("  0: ALKU (Opening Credits)\n");
+            printf("  1: TEST_PART_1 (Red/Blue gradient)\n");
+            printf("  2: TEST_PART_2 (Green/Yellow gradient)\n");
+            exit(0);
+        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            exit(0);
+        }
+    }
+
     return (sapp_desc){
         .init_cb = init,
         .frame_cb = frame,
@@ -248,5 +292,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .height = 400,
         .window_title = "Second Reality",
         .icon.sokol_default = true,
+        .swap_interval = 1,  /* Enable vsync for 60fps timing */
+        .gl.major_version = 3,
+        .gl.minor_version = 3,
     };
 }
