@@ -16,7 +16,7 @@ elseif(WIN32)
     target_compile_definitions(sokol_core PRIVATE SOKOL_D3D11)
     target_link_libraries(sokol_core PUBLIC d3d11 dxgi)
 else()
-    # Linux
+    # Linux - use GLX
     target_compile_definitions(sokol_core PRIVATE SOKOL_GLCORE)
     find_package(Threads REQUIRED)
     target_link_libraries(sokol_core PUBLIC

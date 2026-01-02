@@ -14,4 +14,4 @@ cmake_install.cmake
 *.a
 *.so
 *.dylib
-*.exe
+*.exe.playwright-mcp/

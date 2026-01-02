@@ -364,14 +364,12 @@ void video_present(void) {
     /* Convert indexed framebuffer to RGBA */
     convert_framebuffer_to_rgba();
 
-    /* Calculate actual height based on mode */
-    int height = (video_state.mode == VIDEO_MODE_X) ? VIDEO_HEIGHT_X : VIDEO_HEIGHT_13H;
-
-    /* Update texture with RGBA data */
+    /* Always upload full texture size (VIDEO_HEIGHT_X = 400 lines).
+     * For Mode 13h (200 lines), the bottom half will be black/unused. */
     sg_update_image(video_state.image, &(sg_image_data){
         .mip_levels[0] = {
             .ptr = video_state.rgba_staging,
-            .size = VIDEO_WIDTH * height * sizeof(uint32_t)
+            .size = VIDEO_WIDTH * VIDEO_HEIGHT_X * sizeof(uint32_t)
         }
     });
 

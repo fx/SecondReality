@@ -32,6 +32,14 @@ static struct {
 } music_state;
 
 /**
+ * OpenMPT logging callback for diagnosing load issues
+ */
+static void music_openmpt_log(const char *message, void *user) {
+    (void)user;
+    printf("OPENMPT: %s\n", message);
+}
+
+/**
  * Audio callback - called by Sokol Audio from audio thread.
  * Renders audio and updates position atomically.
  */
@@ -42,10 +50,10 @@ static void music_audio_callback(float *buffer, int num_frames, int num_channels
         return;
     }
 
-    /* Render audio */
+    /* Render audio - use actual sample rate from audio system */
     size_t frames_rendered = openmpt_module_read_interleaved_float_stereo(
         music_state.mod,
-        MUSIC_SAMPLE_RATE,
+        saudio_sample_rate(),
         (size_t)num_frames,
         buffer
     );
@@ -99,7 +107,13 @@ bool music_init(void) {
     atomic_store(&music_state.current_row, 0);
     atomic_store(&music_state.position_seconds_x1000, 0);
 
-    printf("MUSIC: Initialized (sample rate: %d Hz)\n", saudio_sample_rate());
+    int actual_rate = saudio_sample_rate();
+    int actual_channels = saudio_channels();
+    printf("MUSIC: Initialized (requested: %d Hz %d ch, actual: %d Hz %d ch)\n",
+           MUSIC_SAMPLE_RATE, MUSIC_NUM_CHANNELS, actual_rate, actual_channels);
+    if (actual_rate != MUSIC_SAMPLE_RATE) {
+        printf("MUSIC: WARNING - sample rate mismatch! Audio may sound wrong.\n");
+    }
     return true;
 }
 
@@ -126,7 +140,7 @@ bool music_load(const void *data, size_t size) {
     /* Load new module */
     music_state.mod = openmpt_module_create_from_memory2(
         data, size,
-        NULL, /* log_func */
+        music_openmpt_log, /* log_func */
         NULL, /* log_user */
         NULL, /* error_func */
         NULL, /* error_user */
@@ -140,12 +154,68 @@ bool music_load(const void *data, size_t size) {
         return false;
     }
 
-    /* Configure module for interpolated output */
+    /* Print module info for debugging */
+    const char *title = openmpt_module_get_metadata(music_state.mod, "title");
+    const char *type_long = openmpt_module_get_metadata(music_state.mod, "type_long");
+    printf("MUSIC: Module title: %s\n", title ? title : "(null)");
+    printf("MUSIC: Module type: %s\n", type_long ? type_long : "(null)");
+    openmpt_free_string(title);
+    openmpt_free_string(type_long);
+
+    /* Configure module - try disabling interpolation to debug */
     openmpt_module_set_render_param(
         music_state.mod,
         OPENMPT_MODULE_RENDER_INTERPOLATIONFILTER_LENGTH,
-        8 /* 8-tap sinc */
+        0 /* 0 = no interpolation (nearest neighbor) */
     );
+
+    /* Set master gain to 100% */
+    openmpt_module_set_render_param(
+        music_state.mod,
+        OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL,
+        0 /* 0 dB = unity gain */
+    );
+
+    /* Enable looping (repeat forever) */
+    openmpt_module_set_repeat_count(music_state.mod, -1);
+
+    /* Select appropriate subsong - Second Reality S3M has multiple subsongs due to
+     * pattern jump commands used for demo synchronization.
+     *
+     * For the intro (ALKU section), we need a subsong starting at a low order
+     * (like subsong 4 which covers orders 4-15 with intro music). The "longest"
+     * subsong starts at order 50 which is mid-song.
+     *
+     * Strategy: Find a subsong that's long enough (>15 sec) and starts at a
+     * low order number to get the intro music. */
+    int num_subsongs = openmpt_module_get_num_subsongs(music_state.mod);
+    if (num_subsongs > 1) {
+        int best_subsong = 0;
+        double best_duration = 0;
+        int best_start_order = 9999;
+
+        for (int i = 0; i < num_subsongs; i++) {
+            openmpt_module_select_subsong(music_state.mod, i);
+            double dur = openmpt_module_get_duration_seconds(music_state.mod);
+
+            /* Render briefly to find starting order */
+            float tmp[64];
+            openmpt_module_read_interleaved_float_stereo(music_state.mod, 48000, 16, tmp);
+            int start_order = openmpt_module_get_current_order(music_state.mod);
+
+            /* Prefer: duration > 15s AND starts at lowest order */
+            if (dur > 15.0 && start_order < best_start_order) {
+                best_subsong = i;
+                best_duration = dur;
+                best_start_order = start_order;
+            }
+        }
+
+        /* Reset and select the best subsong */
+        openmpt_module_select_subsong(music_state.mod, best_subsong);
+        printf("MUSIC: Selected subsong %d (%.1f sec, starts order %d) out of %d\n",
+               best_subsong, best_duration, best_start_order, num_subsongs);
+    }
 
     /* Reset position */
     atomic_store(&music_state.current_order, 0);
@@ -153,10 +223,23 @@ bool music_load(const void *data, size_t size) {
     atomic_store(&music_state.current_row, 0);
     atomic_store(&music_state.position_seconds_x1000, 0);
 
+    /* Print detailed module info */
+    int num_channels = openmpt_module_get_num_channels(music_state.mod);
+    int num_samples = openmpt_module_get_num_samples(music_state.mod);
+    int num_instruments = openmpt_module_get_num_instruments(music_state.mod);
     printf("MUSIC: Module loaded (duration: %.1f sec, orders: %d, patterns: %d)\n",
            music_get_duration(),
            music_get_num_orders(),
            music_get_num_patterns());
+    printf("MUSIC: channels: %d, samples: %d, instruments: %d\n",
+           num_channels, num_samples, num_instruments);
+
+    /* Print first few sample names to verify they loaded */
+    for (int i = 0; i < num_samples && i < 5; i++) {
+        const char *name = openmpt_module_get_sample_name(music_state.mod, i);
+        printf("MUSIC: sample %d: %s\n", i, name ? name : "(null)");
+        openmpt_free_string(name);
+    }
 
     return true;
 }

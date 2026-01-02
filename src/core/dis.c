@@ -9,27 +9,48 @@
 #include "audio/music.h"
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
+
+/* Sync point timing (frames at 60fps) */
+#define SYNC_FRAMES_PER_POINT 600  /* ~10 seconds per sync point */
+#define SYNC_FRAMES_FIRST 1080     /* ~18 seconds until first sync point */
+#define SYNC_POINT_MAX 8
 
 /* Internal DIS state */
 static struct {
     int initialized;
     int exit_flag;
     int frame_counter;
+    int total_frames;           /* Total frames since part start (for sync) */
     int music_frame;
     int music_code;
     int music_row;
     int music_plus;
     uint8_t msg_areas[DIS_MSG_AREA_COUNT][DIS_MSG_AREA_SIZE];
     dis_copper_fn copper[DIS_COPPER_COUNT];
+    struct timespec start_time; /* Wall clock time when part started */
 } dis_state;
+
+/* Get elapsed milliseconds since part start */
+static int get_elapsed_ms(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long sec_diff = now.tv_sec - dis_state.start_time.tv_sec;
+    long nsec_diff = now.tv_nsec - dis_state.start_time.tv_nsec;
+    return (int)(sec_diff * 1000 + nsec_diff / 1000000);
+}
 
 int dis_version(void) {
     /* Clear transient state */
     dis_state.exit_flag = 0;
     dis_state.frame_counter = 0;
+    dis_state.total_frames = 0;
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;
+
+    /* Record start time for wall-clock sync */
+    clock_gettime(CLOCK_MONOTONIC, &dis_state.start_time);
 
     /* Mark as initialized */
     dis_state.initialized = 1;
@@ -58,6 +79,12 @@ int dis_waitb(void) {
     }
     /* NOTE: Not thread-safe. Must be called from the same thread as dis_frame_tick() */
     dis_state.frame_counter = 0;
+
+    /* Sleep for approximately 1/60th second to simulate 60fps timing.
+     * This ensures blocking fade/wait loops in demo parts run at
+     * the correct speed regardless of actual display frame rate. */
+    struct timespec sleep_time = { .tv_sec = 0, .tv_nsec = 16666667 }; /* ~60fps */
+    nanosleep(&sleep_time, NULL);
 
     return frames;
 }
@@ -118,14 +145,52 @@ int dis_getmframe(void) {
 }
 
 int dis_sync(void) {
-    /* Returns same as musplus for sync point tracking */
-    return dis_musplus();
+    /*
+     * Sync points for ALKU (from original DIS/DISINT.ASM ordersync1 table):
+     *
+     * Original mapping (order*256 + row -> sync):
+     *   0x0000 (order 0) -> sync 0
+     *   0x0200 (order 2) -> sync 1  "A Future Crew Production"
+     *   0x0300 (order 3) -> sync 2  "First Presented at Assembly 93"
+     *   0x032f (order 3, row 47) -> sync 3  "in Second Reality"
+     *   0x042f (order 4, row 47) -> sync 4  Graphics credits
+     *   0x052f (order 5, row 47) -> sync 5  Music credits
+     *   0x062f (order 6, row 47) -> sync 6  Code credits
+     *   0x072f (order 7, row 47) -> sync 7  Additional credits
+     *   0x082f (order 8, row 47) -> sync 8  Exit
+     *
+     * Solution: Use WALL CLOCK TIME for sync (not frame count).
+     * This ensures correct timing regardless of actual frame rate.
+     *
+     * Timing calibrated from reference video (docs/reference.mp4):
+     *   - 16s: "A Future Crew Production" fades in
+     *   - 24s: "First Presented at Assembly 93" fades in
+     *   - 31s: "in Second Reality" / Dolby logo fades in
+     *   - 38s: Horizon scene begins
+     */
+    int ms = get_elapsed_ms();
+
+    /* Wall-clock time based sync (milliseconds)
+     * Timing calibrated from reference video analysis:
+     * - Reference frame_007 (16.0s): text mid-fade
+     * - Reference frame_008 (16.5s): text fully visible
+     * Start fade at ~15.5s so mid-point is ~16s */
+    if (ms < 15500) return 0;      /* 0-15.5s: intro music, black screen */
+    if (ms < 23500) return 1;      /* 15.5-23.5s: "A Future Crew Production" */
+    if (ms < 30500) return 2;      /* 23.5-30.5s: "First Presented at Assembly 93" */
+    if (ms < 37500) return 3;      /* 30.5-37.5s: "in Second Reality" */
+    if (ms < 42500) return 4;      /* 37.5-42.5s: horizon + graphics credits */
+    if (ms < 47500) return 5;      /* 42.5-47.5s: music credits */
+    if (ms < 52500) return 6;      /* 47.5-52.5s: code credits */
+    if (ms < 57500) return 7;      /* 52.5-57.5s: additional credits */
+    return 8;                      /* 56.5s+: exit */
 }
 
 /* Internal Sokol integration functions */
 
 void dis_frame_tick(void) {
     dis_state.frame_counter++;
+    dis_state.total_frames++;
 }
 
 void dis_handle_event(const sapp_event *e) {
@@ -149,9 +214,13 @@ void dis_reset(void) {
     /* Clear transient state for part transitions */
     dis_state.exit_flag = 0;
     dis_state.frame_counter = 0;
+    dis_state.total_frames = 0;
     dis_state.music_code = 0;
     dis_state.music_row = 0;
     dis_state.music_plus = 0;
+
+    /* Reset start time for wall-clock sync */
+    clock_gettime(CLOCK_MONOTONIC, &dis_state.start_time);
 
     /* Clear copper callbacks */
     for (int i = 0; i < DIS_COPPER_COUNT; i++) {
